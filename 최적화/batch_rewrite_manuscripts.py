@@ -3,7 +3,7 @@
 배치 원고 자동 수정 시스템
 - 엑셀 파일의 검수전 원고를 읽어서 자동으로 수정
 - Gemini API 사용
-- 결과를 새 엑셀 파일로 저장
+- 결과를 개별 txt 파일로 저장 (제목 제외, 큰따옴표 제외)
 """
 
 import os
@@ -14,7 +14,7 @@ from auto_manuscript_rewriter import AutoManuscriptRewriter
 
 
 def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
-                  output_file=None,
+                  output_file=None,  # 사용하지 않음 (하위호환성 유지)
                   sheet_name='검수전',
                   max_rows=None,
                   gemini_api_key=None):
@@ -31,17 +31,12 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
         print("  python batch_rewrite_manuscripts.py --api-key 'your-api-key-here'")
         return
 
-    # 출력 파일명 생성
-    if output_file is None:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_file = f'원고수정결과_{timestamp}.xlsx'
-
     print(f"\n{'=' * 100}")
     print(f"배치 원고 자동 수정 시작")
     print(f"{'=' * 100}")
     print(f"입력 파일: {input_file}")
-    print(f"출력 파일: {output_file}")
     print(f"시트명: {sheet_name}")
+    print(f"출력 형식: 개별 txt 파일 (제목 제외)")
 
     # Rewriter 초기화
     try:
@@ -123,7 +118,7 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
             })
             print(f"❌ 실패: {result.get('error', 'Unknown')}")
 
-    # 결과를 엑셀로 저장
+    # 결과를 txt로 저장
     print(f"\n\n{'=' * 100}")
     print(f"결과 저장 중...")
     print(f"{'=' * 100}")
@@ -132,31 +127,58 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
     success_results = [r for r in results if r['status'] == 'success']
 
     if success_results:
-        # 결과 DataFrame 생성
-        output_df = pd.DataFrame([
-            {
-                '행번호': r['row'],
-                '키워드': r['keyword'],
-                '원본_글자수': r['before_chars'],
-                '수정_글자수': r['after_chars'],
-                '원본_첫문단_통키워드': r['before_첫문단_통키워드'],
-                '수정_첫문단_통키워드': r['after_첫문단_통키워드'],
-                '원본_문장시작': r['before_문장시작'],
-                '수정_문장시작': r['after_문장시작'],
-                '원본원고': r['original'],
-                '수정원고': r['rewritten']
-            }
-            for r in success_results
-        ])
+        # 출력 폴더 생성
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_folder = f'원고수정결과_{timestamp}'
+        os.makedirs(output_folder, exist_ok=True)
 
-        # 엑셀로 저장
-        with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-            output_df.to_excel(writer, sheet_name='수정결과', index=False)
+        # 각 원고를 개별 txt 파일로 저장
+        for r in success_results:
+            keyword = r['keyword']
+            rewritten = r['rewritten']
 
-            # 원본 데이터도 함께 저장
-            df.to_excel(writer, sheet_name='원본데이터', index=False)
+            # 제목 제거 (# 로 시작하는 첫 줄 제거)
+            lines = rewritten.split('\n')
+            content_lines = []
+            for line in lines:
+                if line.strip().startswith('#'):
+                    continue  # 제목 건너뛰기
+                content_lines.append(line)
 
-        print(f"✅ 결과 저장 완료: {output_file}")
+            # 맨 앞뒤 빈 줄 제거
+            content = '\n'.join(content_lines).strip()
+
+            # 파일명에 사용 불가능한 문자 제거
+            safe_keyword = keyword.replace('/', '_').replace('\\', '_').replace(':', '_')
+            filename = f"{output_folder}/{safe_keyword}.txt"
+
+            # txt 파일로 저장 (제목 없이, 큰따옴표 없이)
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            print(f"  ✅ {keyword} → {filename}")
+
+        # 통계 파일 저장
+        stats_file = f"{output_folder}/통계.txt"
+        with open(stats_file, 'w', encoding='utf-8') as f:
+            f.write(f"원고 수정 결과 통계\n")
+            f.write(f"{'=' * 80}\n\n")
+            f.write(f"수정 성공: {len(success_results)}개\n")
+            f.write(f"수정 실패: {len([r for r in results if r['status'] == 'failed'])}개\n")
+            f.write(f"건너뜀: {len([r for r in results if r['status'] == 'skipped'])}개\n\n")
+
+            f.write(f"{'=' * 80}\n")
+            f.write(f"개별 원고 통계\n")
+            f.write(f"{'=' * 80}\n\n")
+
+            for r in success_results:
+                f.write(f"[{r['keyword']}]\n")
+                f.write(f"  글자수: {r['before_chars']}자 → {r['after_chars']}자\n")
+                f.write(f"  첫문단 통키워드: {r['before_첫문단_통키워드']}회 → {r['after_첫문단_통키워드']}회 {'✅' if r['after_첫문단_통키워드'] == 2 else '❌'}\n")
+                f.write(f"  문장시작: {r['before_문장시작']}개 → {r['after_문장시작']}개 {'✅' if r['after_문장시작'] == 2 else '❌'}\n")
+                f.write(f"\n")
+
+        print(f"\n✅ 결과 저장 완료: {output_folder}/")
         print(f"   수정 성공: {len(success_results)}개")
         print(f"   수정 실패: {len([r for r in results if r['status'] == 'failed'])}개")
         print(f"   건너뜀: {len([r for r in results if r['status'] == 'skipped'])}개")
@@ -193,9 +215,8 @@ def main():
     """메인 함수"""
     import argparse
 
-    parser = argparse.ArgumentParser(description='배치 원고 자동 수정')
+    parser = argparse.ArgumentParser(description='배치 원고 자동 수정 (txt 파일로 저장)')
     parser.add_argument('--input', '-i', default='블로그 작업_엑셀템플릿.xlsx', help='입력 엑셀 파일')
-    parser.add_argument('--output', '-o', help='출력 엑셀 파일 (기본: 자동생성)')
     parser.add_argument('--sheet', '-s', default='검수전', help='시트명 (기본: 검수전)')
     parser.add_argument('--max-rows', '-n', type=int, help='최대 처리 행수')
     parser.add_argument('--api-key', '-k', help='Gemini API 키')
@@ -204,7 +225,6 @@ def main():
 
     batch_rewrite(
         input_file=args.input,
-        output_file=args.output,
         sheet_name=args.sheet,
         max_rows=args.max_rows,
         gemini_api_key=args.api_key
