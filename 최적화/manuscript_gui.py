@@ -34,7 +34,6 @@ class ManuscriptGUI:
         # 변수
         self.gemini_api_key = tk.StringVar()
         self.input_file = tk.StringVar()
-        self.sheet_name = tk.StringVar(value="검수전")
         self.max_rows = tk.IntVar(value=0)  # 0 = 전체
         self.output_file = tk.StringVar()
 
@@ -120,24 +119,7 @@ class ManuscriptGUI:
         ttk.Button(file_frame, text="파일 선택", command=self.browse_file).grid(row=0, column=1)
 
         # ─────────────────────────────────────────────────
-        # 3. 시트명
-        # ─────────────────────────────────────────────────
-        row += 1
-        ttk.Label(main_frame, text="📊 시트명:", font=("맑은 고딕", 10)).grid(
-            row=row, column=0, sticky=tk.W, pady=5
-        )
-
-        sheet_combo = ttk.Combobox(
-            main_frame,
-            textvariable=self.sheet_name,
-            values=["검수전", "검수 후"],
-            width=20,
-            state="readonly"
-        )
-        sheet_combo.grid(row=row, column=1, sticky=tk.W, pady=5)
-
-        # ─────────────────────────────────────────────────
-        # 4. 처리할 행 수
+        # 3. 처리할 행 수
         # ─────────────────────────────────────────────────
         row += 1
         ttk.Label(main_frame, text="🔢 처리할 행 수:", font=("맑은 고딕", 10)).grid(
@@ -333,7 +315,7 @@ class ManuscriptGUI:
         self.log("🚀 원고 수정 시작")
         self.log("=" * 100)
         self.log(f"📁 입력 파일: {os.path.basename(input_file)}")
-        self.log(f"📊 시트명: {self.sheet_name.get()}")
+        self.log(f"📊 시트명: 검수전")
 
         max_rows = self.max_rows.get()
         if max_rows > 0:
@@ -370,7 +352,7 @@ class ManuscriptGUI:
 
             # 엑셀 읽기
             input_file = self.input_file.get()
-            sheet_name = self.sheet_name.get()
+            sheet_name = "검수전"
 
             self.log(f"📊 엑셀 파일 읽는 중...")
             df = pd.read_excel(input_file, sheet_name=sheet_name)
