@@ -212,13 +212,11 @@ class AutoManuscriptRewriter:
             diff = 2 - 키워드사이_count
             actions.append(f"첫 문단에서 첫 번째와 두 번째 [{keyword}] 사이에 문장 {diff}개 더 추가 (현재 {키워드사이_count}개 → 목표 최소 2개)")
 
-        # 5. 나머지 통키워드 (정확히 일치)
+        # 5. 나머지 통키워드 (최소 이상)
         for kw, data in analysis['나머지_통키워드'].items():
-            diff = data['target'] - data['actual']
-            if diff > 0:
-                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 더 추가 (현재 {data['actual']}회 → 목표 정확히 {data['target']}회)")
-            elif diff < 0:
-                actions.append(f"첫 문단 이후에서 [{kw}] {abs(diff)}회 제거 (현재 {data['actual']}회 → 목표 정확히 {data['target']}회)")
+            if data['actual'] < data['target']:
+                diff = data['target'] - data['actual']
+                actions.append(f"첫 문단 이후에 [{kw}] 최소 {diff}회 더 추가 (현재 {data['actual']}회 → 목표 최소 {data['target']}회 이상, 많아도 OK)")
 
         # 6. 조각키워드 (최소 이상)
         for kw, data in analysis['나머지_조각키워드'].items():
@@ -304,11 +302,17 @@ class AutoManuscriptRewriter:
             for item in forbidden_found[:5]:  # 상위 5개만
                 prompt += f"   - '{item['word']}' → '{item['alternative']}'\n"
 
-        # 수정 작업 목록
+        # 수정 작업 목록 (필수 항목 강조)
         if actions:
-            prompt += "\n✅ 키워드 및 내용 수정:\n"
+            prompt += "\n✅ 키워드 및 내용 수정 (⚠️ 아래 모든 항목 필수!):\n"
             for i, action in enumerate(actions, 1):
-                prompt += f"   {i}. {action}\n"
+                # "문장 시작"과 "첫 문단" 관련 항목은 강조
+                if "문장" in action and "시작" in action:
+                    prompt += f"   ⚠️ {i}. {action} 【필수】\n"
+                elif "첫 문단" in action and "추가" in action:
+                    prompt += f"   ⚠️ {i}. {action} 【필수】\n"
+                else:
+                    prompt += f"   {i}. {action}\n"
 
         prompt += f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -389,13 +393,13 @@ class AutoManuscriptRewriter:
                 키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2
                 chars_ok = after_analysis['chars_in_range']
 
-                # 나머지 통키워드 검증 (모든 키워드가 정확히 목표 횟수와 일치해야 함)
+                # 나머지 통키워드 검증 (최소 이상이어야 함 - 넘어가는 건 OK)
                 나머지_통키워드_ok = True
                 나머지_통키워드_errors = []
                 for kw, data in after_analysis['나머지_통키워드'].items():
-                    if data['actual'] != data['target']:
+                    if data['actual'] < data['target']:
                         나머지_통키워드_ok = False
-                        나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회)")
+                        나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
 
                 # 조각키워드 검증 (목표 이상이어야 함 - 넘어가는 건 OK)
                 조각키워드_ok = True
@@ -510,11 +514,17 @@ class AutoManuscriptRewriter:
             for item in forbidden_found[:5]:
                 prompt += f"   - '{item['word']}' → '{item['alternative']}'\n"
 
-        # 부족한 부분
+        # 부족한 부분 (필수 항목 강조)
         if actions:
-            prompt += "\n✅ 아래 사항을 정확히 수정:\n"
+            prompt += "\n✅ 아래 사항을 정확히 수정 (⚠️ 모든 항목 필수!):\n"
             for i, action in enumerate(actions, 1):
-                prompt += f"   {i}. {action}\n"
+                # "문장 시작"과 "첫 문단" 관련 항목은 강조
+                if "문장" in action and "시작" in action:
+                    prompt += f"   ⚠️ {i}. {action} 【절대 필수】\n"
+                elif "첫 문단" in action and "추가" in action:
+                    prompt += f"   ⚠️ {i}. {action} 【절대 필수】\n"
+                else:
+                    prompt += f"   {i}. {action}\n"
 
         prompt += f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
