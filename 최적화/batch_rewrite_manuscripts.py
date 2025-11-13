@@ -107,23 +107,44 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
                 'after_첫문단_통키워드': result['after_analysis']['첫문단_통키워드'],
                 'before_문장시작': result['before_analysis']['통키워드_문장시작'],
                 'after_문장시작': result['after_analysis']['통키워드_문장시작'],
+                'before_나머지_통키워드': result['before_analysis']['나머지_통키워드'],
+                'after_나머지_통키워드': result['after_analysis']['나머지_통키워드'],
+                'before_조각키워드': result['before_analysis']['나머지_조각키워드'],
+                'after_조각키워드': result['after_analysis']['나머지_조각키워드'],
+                'before_서브키워드': result['before_analysis']['subkeywords'],
+                'after_서브키워드': result['after_analysis']['subkeywords'],
+                'target_whole': target_whole,
+                'target_pieces': target_pieces,
+                'target_subkeywords': target_subkeywords,
             })
             print(f"✅ 성공!")
         else:
             # 실패해도 rewritten이 있으면 저장
             if 'rewritten' in result and result['rewritten']:
+                before_analysis = result.get('before_analysis', {})
+                after_analysis = result.get('after_analysis', {})
+
                 results.append({
                     'row': idx + 2,
                     'keyword': keyword,
                     'status': 'partial',  # 부분 성공 (기준 미달이지만 텍스트는 있음)
                     'original': result['original'],
                     'rewritten': result['rewritten'],
-                    'before_chars': result.get('before_analysis', {}).get('chars', 0) if 'before_analysis' in result else 0,
-                    'after_chars': result.get('after_analysis', {}).get('chars', 0) if 'after_analysis' in result else 0,
-                    'before_첫문단_통키워드': result.get('before_analysis', {}).get('첫문단_통키워드', 0) if 'before_analysis' in result else 0,
-                    'after_첫문단_통키워드': result.get('after_analysis', {}).get('첫문단_통키워드', 0) if 'after_analysis' in result else 0,
-                    'before_문장시작': result.get('before_analysis', {}).get('통키워드_문장시작', 0) if 'before_analysis' in result else 0,
-                    'after_문장시작': result.get('after_analysis', {}).get('통키워드_문장시작', 0) if 'after_analysis' in result else 0,
+                    'before_chars': before_analysis.get('chars', 0),
+                    'after_chars': after_analysis.get('chars', 0),
+                    'before_첫문단_통키워드': before_analysis.get('첫문단_통키워드', 0),
+                    'after_첫문단_통키워드': after_analysis.get('첫문단_통키워드', 0),
+                    'before_문장시작': before_analysis.get('통키워드_문장시작', 0),
+                    'after_문장시작': after_analysis.get('통키워드_문장시작', 0),
+                    'before_나머지_통키워드': before_analysis.get('나머지_통키워드', {}),
+                    'after_나머지_통키워드': after_analysis.get('나머지_통키워드', {}),
+                    'before_조각키워드': before_analysis.get('나머지_조각키워드', {}),
+                    'after_조각키워드': after_analysis.get('나머지_조각키워드', {}),
+                    'before_서브키워드': before_analysis.get('subkeywords', {}),
+                    'after_서브키워드': after_analysis.get('subkeywords', {}),
+                    'target_whole': target_whole,
+                    'target_pieces': target_pieces,
+                    'target_subkeywords': target_subkeywords,
                     'error': result.get('error', '기준 미달')
                 })
                 print(f"⚠️ 기준 미달 (저장함): {result.get('error', 'Unknown')}")
@@ -198,6 +219,33 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
                 f.write(f"  글자수: {r['before_chars']}자 → {r['after_chars']}자\n")
                 f.write(f"  첫문단 통키워드: {r['before_첫문단_통키워드']}회 → {r['after_첫문단_통키워드']}회 {'✅' if r['after_첫문단_통키워드'] == 2 else '❌'}\n")
                 f.write(f"  문장시작: {r['before_문장시작']}개 → {r['after_문장시작']}개 {'✅' if r['after_문장시작'] == 2 else '❌'}\n")
+
+                # 나머지 통키워드
+                after_나머지_통키워드 = r.get('after_나머지_통키워드', {})
+                if after_나머지_통키워드:
+                    for kw, data in after_나머지_통키워드.items():
+                        target = data.get('target', 0)
+                        actual = data.get('actual', 0)
+                        icon = '✅' if actual == target else '❌'
+                        f.write(f"  나머지 [{kw}]: {actual}회 (목표: {target}회) {icon}\n")
+
+                # 조각키워드
+                after_조각키워드 = r.get('after_조각키워드', {})
+                if after_조각키워드:
+                    for kw, data in after_조각키워드.items():
+                        target = data.get('target', 0)
+                        actual = data.get('actual', 0)
+                        icon = '✅' if actual == target else '❌'
+                        f.write(f"  조각 [{kw}]: {actual}회 (목표: {target}회) {icon}\n")
+
+                # 서브키워드
+                after_서브키워드 = r.get('after_서브키워드', {})
+                if after_서브키워드:
+                    target = after_서브키워드.get('target', 0)
+                    actual = after_서브키워드.get('actual', 0)
+                    icon = '✅' if actual >= target else '❌'
+                    f.write(f"  서브키워드 목록 수: {actual}개 (목표: {target}개 이상) {icon}\n")
+
                 if r['status'] == 'partial':
                     f.write(f"  ⚠️ {r.get('error', '기준 미달')}\n")
                 f.write(f"\n")
