@@ -165,6 +165,74 @@ class AutoManuscriptRewriter:
                 result[kw] = count
         return result
 
+    def check_forbidden_words(self, text: str) -> List[Dict[str, str]]:
+        """금칙어 체크 및 대체어 제안"""
+        found = []
+        for forbidden, alternatives in self.forbidden_words.items():
+            if forbidden in text:
+                found.append({
+                    'word': forbidden,
+                    'alternative': alternatives[0] if alternatives else '(대체어 없음)'
+                })
+        return found
+
+    def create_action_plan(self, analysis: Dict, keyword: str,
+                          target_whole_str: str, target_pieces_str: str) -> List[str]:
+        """수정해야 할 작업 목록 생성 (Python이 정확히 계산)"""
+        actions = []
+
+        # 1. 글자수 체크
+        chars = analysis['chars']
+        if chars < 300:
+            actions.append(f"글자수 {300 - chars}자 이상 늘리기 (현재 {chars}자 → 목표 300~900자)")
+        elif chars > 900:
+            actions.append(f"글자수 {chars - 900}자 줄이기 (현재 {chars}자 → 목표 300~900자)")
+
+        # 2. 첫문단 통키워드 (정확히 2회)
+        첫문단_count = analysis['첫문단_통키워드']
+        if 첫문단_count < 2:
+            diff = 2 - 첫문단_count
+            actions.append(f"첫 문단에 [{keyword}] {diff}회 더 추가 (현재 {첫문단_count}회 → 목표 정확히 2회)")
+        elif 첫문단_count > 2:
+            diff = 첫문단_count - 2
+            actions.append(f"첫 문단에서 [{keyword}] {diff}회 제거 (현재 {첫문단_count}회 → 목표 정확히 2회)")
+
+        # 3. 문장 시작 (정확히 2개)
+        문장시작_count = analysis['통키워드_문장시작']
+        if 문장시작_count < 2:
+            diff = 2 - 문장시작_count
+            actions.append(f"[{keyword}]로 시작하는 문장 {diff}개 더 추가 (현재 {문장시작_count}개 → 목표 정확히 2개)")
+        elif 문장시작_count > 2:
+            diff = 문장시작_count - 2
+            actions.append(f"[{keyword}]로 시작하는 문장 {diff}개 제거 (현재 {문장시작_count}개 → 목표 정확히 2개)")
+
+        # 4. 첫문단 키워드 사이 문장 (최소 2개)
+        키워드사이_count = analysis['첫문단_키워드사이_문장수']
+        if 키워드사이_count < 2:
+            diff = 2 - 키워드사이_count
+            actions.append(f"첫 문단에서 첫 번째와 두 번째 [{keyword}] 사이에 문장 {diff}개 더 추가 (현재 {키워드사이_count}개 → 목표 최소 2개)")
+
+        # 5. 나머지 통키워드 (정확히 일치)
+        for kw, data in analysis['나머지_통키워드'].items():
+            diff = data['target'] - data['actual']
+            if diff > 0:
+                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 더 추가 (현재 {data['actual']}회 → 목표 정확히 {data['target']}회)")
+            elif diff < 0:
+                actions.append(f"첫 문단 이후에서 [{kw}] {abs(diff)}회 제거 (현재 {data['actual']}회 → 목표 정확히 {data['target']}회)")
+
+        # 6. 조각키워드 (최소 이상)
+        for kw, data in analysis['나머지_조각키워드'].items():
+            if data['actual'] < data['target']:
+                diff = data['target'] - data['actual']
+                actions.append(f"첫 문단 이후에 [{kw}] 최소 {diff}회 더 추가 (현재 {data['actual']}회 → 목표 최소 {data['target']}회 이상, 많아도 OK)")
+
+        # 7. 서브키워드 (최소 이상)
+        sub_diff = analysis['subkeywords']['target'] - analysis['subkeywords']['actual']
+        if sub_diff > 0:
+            actions.append(f"2회 이상 반복되는 단어를 최소 {sub_diff}개 더 추가 (현재 {analysis['subkeywords']['actual']}개 → 목표 최소 {analysis['subkeywords']['target']}개 이상)")
+
+        return actions
+
     def analyze_manuscript(self, manuscript: str, keyword: str,
                           target_whole_str: str, target_pieces_str: str,
                           target_subkeywords: int) -> Dict:
@@ -215,152 +283,60 @@ class AutoManuscriptRewriter:
 
     def create_rewrite_prompt(self, manuscript: str, keyword: str, analysis: Dict,
                              target_whole_str: str, target_pieces_str: str) -> str:
-        """Gemini용 수정 프롬프트 생성"""
+        """Gemini용 수정 프롬프트 생성 (간소화 버전)"""
 
-        # 금칙어 리스트
-        forbidden_list = list(self.forbidden_words.keys())[:30]  # 상위 30개만
+        # Python이 정확히 계산한 수정 작업 목록
+        actions = self.create_action_plan(analysis, keyword, target_whole_str, target_pieces_str)
 
-        # 나머지 통키워드 목록
-        나머지_통키워드_rules = []
-        for kw, data in analysis['나머지_통키워드'].items():
-            나머지_통키워드_rules.append(f"  - [{kw}] 정확히 {data['target']}회 (첫 문단 이후 부분에서)")
+        # 금칙어 체크
+        forbidden_found = self.check_forbidden_words(manuscript)
 
-        # 조각키워드 목록
-        조각키워드_rules = []
-        for kw, data in analysis['나머지_조각키워드'].items():
-            조각키워드_rules.append(f"  - [{kw}] 정확히 {data['target']}회 (첫 문단 이후 부분에서)")
+        prompt = f"""블로그 원고를 아래 지시사항대로 수정하세요.
 
-        # 서브키워드 목표
-        서브키워드_target = analysis['subkeywords']['target']
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 수정 지시사항 ({len(actions) + len(forbidden_found)}개)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 
-        # 총 규칙 개수
-        rule_count = 4  # 기본 4개: 첫문단 2회, 문장시작 2개, 키워드사이 2문장, 글자수
-        if 나머지_통키워드_rules:
-            rule_count += 1
-        if 조각키워드_rules:
-            rule_count += 1
-        if 서브키워드_target > 0:
-            rule_count += 1
+        # 금칙어 치환
+        if forbidden_found:
+            prompt += "\n🚫 금칙어 치환:\n"
+            for item in forbidden_found[:5]:  # 상위 5개만
+                prompt += f"   - '{item['word']}' → '{item['alternative']}'\n"
 
-        prompt = f"""🔴 절대 규칙: 아래 {rule_count}개 기준을 정확히 지켜야 합니다. 1개라도 어기면 실격입니다.
-
-작업 방식:
-- 원본 글 내용 최대한 유지
-- 키워드만 추가하거나 위치 조정
-- 글을 처음부터 새로 쓰지 말 것!
-
-글 구조 (필수):
-✅ 도입부: 불편함이나 고민 표현 (예: "~때문에 고민이 많습니다", "~로 힘들어요")
-✅ 마무리: 댓글 유도 또는 정보 공유 요청 (예: "정보 공유 부탁드려요", "댓글로 알려주세요")
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 엄격한 기준 ({rule_count}개 모두 정확히 지켜야 함!)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-키워드: {keyword}
-
-🔴 규칙 1: 첫 문단에 [{keyword}] 정확히 2번
-   - 1번 ❌, 2번 ✅, 3번 ❌
-   - 조사 붙으면 카운팅 안 됨!
-   - 첫 번째와 두 번째 [{keyword}] 사이에 최소 2문장 이상 있어야 함!
-
-🔴 규칙 2: [{keyword}]로 시작하는 문장 정확히 2개
-   - 1개 ❌, 2개 ✅, 3개 ❌
-   - 줄 맨 앞에서 시작해야 함!
-
-🔴 규칙 3: 첫 문단 키워드 사이에 2문장 이상
-   - 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이 최소 2문장
-
-🔴 규칙 4: 글자수 300~900자 (공백 제외)"""
-
-        # 나머지 통키워드
-        rule_num = 5
-        if 나머지_통키워드_rules:
-            prompt += f"""
-
-🔴 규칙 {rule_num}: 나머지 통키워드 (첫 문단 이후)"""
-            for kw, data in analysis['나머지_통키워드'].items():
-                prompt += f"""
-   - [{kw}] 정확히 {data['target']}회 (±1도 안 됨!)"""
-            rule_num += 1
-
-        # 조각키워드
-        if 조각키워드_rules:
-            prompt += f"""
-
-🔴 규칙 {rule_num}: 조각키워드 (첫 문단 이후)"""
-            for kw, data in analysis['나머지_조각키워드'].items():
-                prompt += f"""
-   - [{kw}] 최소 {data['target']}회 이상 (많아도 OK, 모자라면 실격!)"""
-            rule_num += 1
-
-        # 서브키워드
-        if 서브키워드_target > 0:
-            prompt += f"""
-
-🔴 규칙 {rule_num}: 서브키워드 {서브키워드_target}개 이상
-   - 2회 이상 등장하는 단어가 {서브키워드_target}개 이상
-   - ^^, ??, ..., ;;, !! 같은 중복 문장부호도 2회 이상 사용하면 카운팅됨"""
-
-        # 금칙어
-        forbidden_list = list(self.forbidden_words.keys())[:10]
-        if forbidden_list:
-            prompt += f"""
-
-🚫 금칙어 치환 필수:
-{chr(10).join(f'   - {word} → {", ".join(self.forbidden_words[word][:2])}' for word in forbidden_list)}
-(전체 {len(self.forbidden_words)}개)"""
+        # 수정 작업 목록
+        if actions:
+            prompt += "\n✅ 키워드 및 내용 수정:\n"
+            for i, action in enumerate(actions, 1):
+                prompt += f"   {i}. {action}\n"
 
         prompt += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 중요 규칙
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ 카운팅 규칙 (중요!)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. 조사 붙으면 카운팅 안 됨!
+   ❌ {keyword}에, {keyword}를, {keyword}가
+   ✅ {keyword} 관련해서, {keyword} 때문에 (띄어쓰기!)
 
-❌ 조사 붙으면 카운팅 안 됨:
-   {keyword}에, {keyword}를, {keyword}가 등
+2. 원본 글 내용과 흐름 최대한 유지
+   - 키워드만 추가/제거/위치 조정
+   - 처음부터 새로 쓰지 말 것
 
-✅ 띄어쓰기 있으면 카운팅됨:
-   {keyword} 관련해서, {keyword} 때문에, {keyword} 정보를
+3. 도입부: 고민이나 불편함 표현
+4. 마무리: 댓글 유도 또는 정보 공유 요청
 
-📌 조사 처리 가이드:
-   - 한 글자 조사 (에, 를, 가, 은, 이): 우회 문장으로 작성
-     예) "{keyword}에 대해" → "{keyword} 관련해서"
-   - 두 글자 이상 조사 (에서, 에게, 으로): 띄어쓰기로 가능
-     예) "{keyword}에서" → "{keyword} 에서" (띄어쓰기)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 원본 원고
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {manuscript}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ 출력 전 직접 세어보기!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-출력 전 반드시 확인:
-✓ 첫 문단 [{keyword} ]: 정확히 2번?
-✓ 문장 시작 [{keyword}]: 정확히 2개?
-✓ 글자수: 300~900자?"""
-
-        if 나머지_통키워드_rules:
-            for kw, data in analysis['나머지_통키워드'].items():
-                prompt += f"""
-✓ [{kw}]: 정확히 {data['target']}회?"""
-
-        if 조각키워드_rules:
-            for kw, data in analysis['나머지_조각키워드'].items():
-                prompt += f"""
-✓ [{kw}]: 정확히 {data['target']}회?"""
-
-        if 서브키워드_target > 0:
-            prompt += f"""
-✓ 서브키워드: {서브키워드_target}개 이상?"""
-
-        prompt += """
-
-수정된 원고만 출력하세요.
+수정된 원고만 출력하세요 (설명 없이).
 """
         return prompt
 
@@ -513,111 +489,59 @@ class AutoManuscriptRewriter:
     def create_retry_prompt(self, original: str, keyword: str, failed_text: str,
                            failed_analysis: Dict, target_whole_str: str,
                            target_pieces_str: str) -> str:
-        """재시도용 프롬프트 (이전 실패 이유 포함 - ALL 7개 기준)"""
+        """재시도용 프롬프트 (간소화 버전 - 실패 이유만 강조)"""
 
-        first_para_count = failed_analysis['첫문단_통키워드']
-        sentence_start_count = failed_analysis['통키워드_문장시작']
-        키워드사이_문장수 = failed_analysis['첫문단_키워드사이_문장수']
-        chars = failed_analysis['chars']
-        chars_ok = failed_analysis['chars_in_range']
+        # Python이 정확히 계산한 수정 작업 목록
+        actions = self.create_action_plan(failed_analysis, keyword, target_whole_str, target_pieces_str)
 
-        # 나머지 통키워드 상태
-        나머지_통키워드_status = []
-        for kw, data in failed_analysis['나머지_통키워드'].items():
-            icon = '✅' if data['actual'] == data['target'] else '❌'
-            나머지_통키워드_status.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회) {icon}")
+        # 금칙어 체크
+        forbidden_found = self.check_forbidden_words(failed_text)
 
-        # 조각키워드 상태
-        조각키워드_status = []
-        for kw, data in failed_analysis['나머지_조각키워드'].items():
-            icon = '✅' if data['actual'] >= data['target'] else '❌'
-            조각키워드_status.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상) {icon}")
+        prompt = f"""⚠️ 이전 수정이 기준 미달입니다. 다시 수정하세요.
 
-        # 서브키워드 상태
-        sub_actual = failed_analysis['subkeywords']['actual']
-        sub_target = failed_analysis['subkeywords']['target']
-        sub_ok = sub_actual >= sub_target
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ 이전 시도에서 부족했던 부분
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 
-        prompt = f"""이전 수정이 실패했습니다. 다시 수정해주세요.
+        # 금칙어
+        if forbidden_found:
+            prompt += "\n🚫 금칙어 치환:\n"
+            for item in forbidden_found[:5]:
+                prompt += f"   - '{item['word']}' → '{item['alternative']}'\n"
 
-⚠️ **최우선**: ALL 7개 규칙을 정확히 지키세요! 규칙 준수가 1순위입니다.
+        # 부족한 부분
+        if actions:
+            prompt += "\n✅ 아래 사항을 정확히 수정:\n"
+            for i, action in enumerate(actions, 1):
+                prompt += f"   {i}. {action}\n"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-❌ 이전 실패 이유 (7개 기준 검증 결과)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        prompt += f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 이전 시도 (기준 미달)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-키워드: **{keyword}**
-
-1. 글자수: {chars}자 (목표: 300-900자) {'✅' if chars_ok else '❌'}
-2. 첫 문단 [{keyword}] 카운팅: {first_para_count}회 (목표: 정확히 2회) {'✅' if first_para_count == 2 else '❌'}
-3. 문장 시작 [{keyword}] 개수: {sentence_start_count}개 (목표: 정확히 2개) {'✅' if sentence_start_count == 2 else '❌'}
-4. 첫 문단 키워드 사이 문장: {키워드사이_문장수}개 (목표: 최소 2개) {'✅' if 키워드사이_문장수 >= 2 else '❌'}
-5. 나머지 통키워드:
-   {chr(10).join('   - ' + s for s in 나머지_통키워드_status) if 나머지_통키워드_status else '   (없음)'}
-6. 조각키워드:
-   {chr(10).join('   - ' + s for s in 조각키워드_status) if 조각키워드_status else '   (없음)'}
-7. 서브키워드: {sub_actual}개 (목표: {sub_target}개 이상) {'✅' if sub_ok else '❌'}
-
-**이전에 작성한 원고:**
 {failed_text}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 다시 작성 시 주의사항 (ALL 7개 기준 충족 필수!)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 중요 규칙 (재확인)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**기본 규칙 1: 첫 문단에 [{keyword}] 정확히 2번**
-- 현재: {first_para_count}번 → 목표: 2번
-- ⚠️ 3번 이상 절대 안 됨! 정확히 2번만!
+1. 조사 붙으면 카운팅 안 됨!
+   ❌ {keyword}에, {keyword}를, {keyword}가
+   ✅ {keyword} 관련해서, {keyword} 때문에 (띄어쓰기!)
 
-**기본 규칙 2: [{keyword}]로 시작하는 문장 정확히 2개**
-- 현재: {sentence_start_count}개 → 목표: 2개
-- ⚠️ 3개 이상 절대 안 됨! 정확히 2개만!
+2. 원본 글 흐름 유지하면서 키워드만 조정
 
-**기본 규칙 3: 첫 문단 키워드 사이 문장 최소 2개**
-- 현재: {키워드사이_문장수}개 → 목표: 최소 2개
-- ⚠️ 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 문장 2개 이상!
-
-**추가 규칙 4: 나머지 통키워드 정확한 횟수 사용**
-{chr(10).join('- ' + s for s in 나머지_통키워드_status) if 나머지_통키워드_status else '(없음)'}
-
-**추가 규칙 5: 조각키워드 정확한 횟수 사용**
-{chr(10).join('- ' + s for s in 조각키워드_status) if 조각키워드_status else '(없음)'}
-
-**추가 규칙 6: 서브키워드 목록 수 충족**
-- 현재: {sub_actual}개 → 목표: {sub_target}개 이상
-
-**추가 규칙 7: 글자수 범위**
-- 현재: {chars}자 → 목표: 300-900자
-
-**절대 금지 패턴 (조사 붙으면 카운팅 안 됨!):**
-❌ {keyword}에 ❌ {keyword}에서 ❌ {keyword}를 ❌ {keyword}가
-
-**올바른 패턴 (띄어쓰기!):**
-✅ {keyword} 관련해서 ✅ {keyword} 때문에 ✅ {keyword} 후기를
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📄 원본 원고
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 원본 원고 (참고)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {original}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ 이번엔 반드시 ALL 7개 규칙 준수!
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-**필수 체크리스트: (모두 절대 준수!)**
-1. 첫 문단에서 [{keyword} ] (띄어쓰기) 패턴을 정확히 2번 사용 (1번❌ 3번❌)
-2. 줄 맨 앞에 [{keyword} ]로 시작하는 문장을 정확히 2개 작성 (1개❌ 3개❌)
-3. 첫 문단에서 첫 번째와 두 번째 [{keyword}] 사이에 문장 최소 2개 배치
-4. 나머지 통키워드를 정확히 지정된 횟수만큼 사용
-5. 조각키워드를 정확히 지정된 횟수만큼 사용
-6. 서브키워드를 지정된 개수 이상 사용 (^^, ??, ... 같은 중복 문장부호도 카운팅됨!)
-7. 글자수를 300-900자 범위 내로 작성
-8. 조사 절대 금지! (한 글자 조사는 우회, 두 글자 이상은 띄어쓰기)
-
-**우선순위:**
-1순위: 위 ALL 7개 규칙 정확히 지키기 (필수!)
-2순위: 가능하면 자연스럽게 (규칙 지킨 상태에서만)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 수정된 원고만 출력하세요 (설명 없이).
 """
