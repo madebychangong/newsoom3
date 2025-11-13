@@ -298,12 +298,16 @@ class AutoManuscriptRewriter:
         print(f"통키워드 문장 시작: {analysis['통키워드_문장시작']}개 (목표: 2개)")
 
         # 재시도 루프
+        rewritten = None  # 초기화
+        after_analysis = None  # 초기화
+
         for attempt in range(max_retries):
             print(f"\n🤖 Gemini가 원고를 수정 중... (시도 {attempt + 1}/{max_retries})")
 
             try:
                 # 2. 프롬프트 생성
-                if attempt == 0:
+                if attempt == 0 or rewritten is None:
+                    # 첫 시도이거나 이전 시도에서 rewritten이 없으면 기본 프롬프트
                     prompt = self.create_rewrite_prompt(manuscript, keyword, analysis,
                                                        target_whole_str, target_pieces_str)
                 else:
