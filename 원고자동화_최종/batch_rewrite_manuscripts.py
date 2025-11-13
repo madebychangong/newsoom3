@@ -84,7 +84,7 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
         print(f"[{idx+2}행] {keyword} 처리 중... ({idx+1}/{total})")
         print(f"{'=' * 100}")
 
-        # 원고 수정 (재시도 1번만)
+        # 원고 수정 (재시도 1번 - 첫 시도에 성공하도록!)
         result = rewriter.rewrite_manuscript(
             manuscript=원고,
             keyword=keyword,
