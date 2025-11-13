@@ -84,13 +84,14 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
         print(f"[{idx+2}행] {keyword} 처리 중... ({idx+1}/{total})")
         print(f"{'=' * 100}")
 
-        # 원고 수정
+        # 원고 수정 (재시도 1번만)
         result = rewriter.rewrite_manuscript(
             manuscript=원고,
             keyword=keyword,
             target_whole_str=target_whole,
             target_pieces_str=target_pieces,
-            target_subkeywords=target_subkeywords
+            target_subkeywords=target_subkeywords,
+            max_retries=1
         )
 
         if result['success']:
@@ -109,22 +110,40 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
             })
             print(f"✅ 성공!")
         else:
-            results.append({
-                'row': idx + 2,
-                'keyword': keyword,
-                'status': 'failed',
-                'error': result.get('error', 'Unknown error'),
-                'original': result['original']
-            })
-            print(f"❌ 실패: {result.get('error', 'Unknown')}")
+            # 실패해도 rewritten이 있으면 저장
+            if 'rewritten' in result and result['rewritten']:
+                results.append({
+                    'row': idx + 2,
+                    'keyword': keyword,
+                    'status': 'partial',  # 부분 성공 (기준 미달이지만 텍스트는 있음)
+                    'original': result['original'],
+                    'rewritten': result['rewritten'],
+                    'before_chars': result.get('before_analysis', {}).get('chars', 0) if 'before_analysis' in result else 0,
+                    'after_chars': result.get('after_analysis', {}).get('chars', 0) if 'after_analysis' in result else 0,
+                    'before_첫문단_통키워드': result.get('before_analysis', {}).get('첫문단_통키워드', 0) if 'before_analysis' in result else 0,
+                    'after_첫문단_통키워드': result.get('after_analysis', {}).get('첫문단_통키워드', 0) if 'after_analysis' in result else 0,
+                    'before_문장시작': result.get('before_analysis', {}).get('통키워드_문장시작', 0) if 'before_analysis' in result else 0,
+                    'after_문장시작': result.get('after_analysis', {}).get('통키워드_문장시작', 0) if 'after_analysis' in result else 0,
+                    'error': result.get('error', '기준 미달')
+                })
+                print(f"⚠️ 기준 미달 (저장함): {result.get('error', 'Unknown')}")
+            else:
+                results.append({
+                    'row': idx + 2,
+                    'keyword': keyword,
+                    'status': 'failed',
+                    'error': result.get('error', 'Unknown error'),
+                    'original': result['original']
+                })
+                print(f"❌ 실패: {result.get('error', 'Unknown')}")
 
     # 결과를 txt로 저장
     print(f"\n\n{'=' * 100}")
     print(f"결과 저장 중...")
     print(f"{'=' * 100}")
 
-    # 성공한 것들만 추출
-    success_results = [r for r in results if r['status'] == 'success']
+    # 성공 또는 부분 성공 (기준 미달이지만 텍스트 있음)
+    success_results = [r for r in results if r['status'] in ['success', 'partial']]
 
     if success_results:
         # 출력 폴더 생성
@@ -163,8 +182,10 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
         with open(stats_file, 'w', encoding='utf-8') as f:
             f.write(f"원고 수정 결과 통계\n")
             f.write(f"{'=' * 80}\n\n")
-            f.write(f"수정 성공: {len(success_results)}개\n")
-            f.write(f"수정 실패: {len([r for r in results if r['status'] == 'failed'])}개\n")
+            f.write(f"저장됨: {len(success_results)}개\n")
+            f.write(f"  - 기준 충족 ✅: {len([r for r in success_results if r['status'] == 'success'])}개\n")
+            f.write(f"  - 기준 미달 ⚠️: {len([r for r in success_results if r['status'] == 'partial'])}개\n")
+            f.write(f"저장 안 됨: {len([r for r in results if r['status'] == 'failed'])}개\n")
             f.write(f"건너뜀: {len([r for r in results if r['status'] == 'skipped'])}개\n\n")
 
             f.write(f"{'=' * 80}\n")
@@ -172,15 +193,20 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
             f.write(f"{'=' * 80}\n\n")
 
             for r in success_results:
-                f.write(f"[{r['keyword']}]\n")
+                status_icon = '✅' if r['status'] == 'success' else '⚠️'
+                f.write(f"[{r['keyword']}] {status_icon}\n")
                 f.write(f"  글자수: {r['before_chars']}자 → {r['after_chars']}자\n")
                 f.write(f"  첫문단 통키워드: {r['before_첫문단_통키워드']}회 → {r['after_첫문단_통키워드']}회 {'✅' if r['after_첫문단_통키워드'] == 2 else '❌'}\n")
                 f.write(f"  문장시작: {r['before_문장시작']}개 → {r['after_문장시작']}개 {'✅' if r['after_문장시작'] == 2 else '❌'}\n")
+                if r['status'] == 'partial':
+                    f.write(f"  ⚠️ {r.get('error', '기준 미달')}\n")
                 f.write(f"\n")
 
         print(f"\n✅ 결과 저장 완료: {output_folder}/")
-        print(f"   수정 성공: {len(success_results)}개")
-        print(f"   수정 실패: {len([r for r in results if r['status'] == 'failed'])}개")
+        print(f"   저장됨: {len(success_results)}개")
+        print(f"     - 기준 충족: {len([r for r in success_results if r['status'] == 'success'])}개")
+        print(f"     - 기준 미달: {len([r for r in success_results if r['status'] == 'partial'])}개")
+        print(f"   저장 안 됨: {len([r for r in results if r['status'] == 'failed'])}개")
         print(f"   건너뜀: {len([r for r in results if r['status'] == 'skipped'])}개")
     else:
         print(f"❌ 성공한 결과가 없어서 파일을 저장하지 않았습니다.")
