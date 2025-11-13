@@ -1,145 +1,204 @@
-# 블로그 검색 최적화 프로그램
+# 원고 자동 검수 및 수정 시스템
 
-네이버 블로그 원고를 검색 노출에 최적화하는 프로그램입니다.
+회사 기준에 맞게 블로그 원고를 자동으로 검수하고 수정하는 시스템입니다.
 
-## ✨ 주요 기능
+## 주요 기능
 
-### 키워드 최적화
-- ✅ 키워드 띄어쓰기 자동 수정
-- ✅ 키워드+조사 제거 (를/을/가/이/에/의/는/은)
-- ✅ 키워드 출현 빈도 최적화 (5-6회 → 2-3회)
-- ✅ # 제목 자동 제거
+1. **원고 자동 검수**: 회사 기준에 맞는지 자동으로 체크
+2. **원고 자동 수정**: Gemini API를 사용하여 자연스럽게 키워드 추가/삭제
+3. **배치 처리**: 엑셀 파일의 여러 원고를 한번에 처리
+4. **금칙어 치환**: 금칙어를 자동으로 대체어로 변경
 
-### 금칙어 치환
-- ✅ 네이버 금칙어 자동 치환
-- ✅ AI 느낌 나는 표현 제거
-- ✅ 자연스러운 구어체로 변환
+## 회사 검수 기준
 
-### 엑셀 일괄 처리
-- ✅ 여러 원고를 한 번에 처리
-- ✅ 키워드, 브랜드별 자동 최적화
-- ✅ 결과를 새 엑셀 파일로 저장
+### 1. 글자수
+- **목표**: 300~900자 (공백/줄바꿈 제외)
+- 너무 길면 축약, 짧으면 내용 추가
 
-## 📦 프로그램 구성
+### 2. 첫 문단 규칙
+- **통키워드 정확히 2회** 출현
+- **통키워드로 시작하는 문장(줄) 2개**
+- 예: "강남 맛집 추천 때문에..." (1번째)
+      "강남 맛집 추천 이렇게..." (2번째)
 
-### GUI 프로그램 (EXE)
-```
-블로그SEO최적화.exe
-```
-- Windows에서 바로 실행 가능
-- 엑셀 파일을 드래그 앤 드롭으로 처리
-- 실시간 진행 상황 표시
+### 3. 나머지 부분 키워드 (첫 문단 제외)
+- D열: 통키워드 반복수 (예: "강남 맛집 추천 : 0")
+- E열: 조각키워드 반복수 (예: "강남 : 2\n맛집 : 3\n추천 : 1")
 
-### 필요한 파일
-```
-블로그SEO최적화.exe       # 실행 파일
-금칙어 수정사항 모음.txt    # 금칙어 목록 (같은 폴더에 있어야 함)
-```
+### 4. 서브키워드
+- F열: 서브키워드 목록 수
+- 2회 이상 등장하는 단어 개수
+- 통키워드, 조각키워드는 제외
 
-## 🚀 사용 방법
+### 5. 키워드 카운팅 규칙 (매우 중요!)
+- 키워드 뒤에 **조사가 바로 붙으면 카운팅 X**
+- 키워드 뒤에 **띄어쓰기나 문장부호**가 있어야 카운팅 O
 
-### 1. EXE 실행
-1. `블로그SEO최적화.exe` 더블클릭
-2. "파일 선택" 버튼 클릭 또는 엑셀 파일 드래그
-3. "최적화 시작" 버튼 클릭
-4. 처리 완료되면 `_검색최적화.xlsx` 파일 생성
+**예시:**
+- ❌ "강남 맛집 추천을 찾아서" → 카운팅 X (조사 '을' 붙음)
+- ✅ "강남 맛집 추천 찾아서" → 카운팅 O (띄어쓰기)
+- ✅ "강남 맛집 추천." → 카운팅 O (문장부호)
+- ✅ "강남 맛집 추천 관련해서" → 카운팅 O (자연스러움)
 
-### 2. 엑셀 파일 형식
-필수 열:
-- `키워드`: 최적화할 키워드
-- `원고`: 최적화할 원고 내용
-- `브랜드`: (선택) 브랜드명
+### 6. 금칙어 치환
+- 금칙어 절대 사용 금지
+- 자연스러운 대체어로 교체
+- 금칙어 리스트.xlsx 파일에서 로드
 
-출력 열:
-- `최적화_원고`: 최적화된 원고
-- `키워드_출현`: 키워드 출현 횟수
-- `변경사항`: 변경 내용 요약
-- `추천_해시태그`: 추천 해시태그 목록
+## 설치
 
-## 🔧 개발자용
-
-### 빌드 방법
 ```bash
-# Windows
-build.bat
-
-# Linux/Mac
-./build.sh
+pip install pandas openpyxl google-generativeai
 ```
 
-### 테스트 방법
+## 사용법
+
+### 1. Gemini API 키 설정
+
 ```bash
-# 빠른 테스트 (첫 번째 원고만)
-python3 quick_test.py
-
-# 대화형 테스트
-python3 test_optimizer.py
+export GEMINI_API_KEY='your-api-key-here'
 ```
 
-### 필요한 패키지
+### 2. 단일 원고 검수
+
 ```bash
-pip install -r requirements.txt
+cd 최적화
+python auto_manuscript_rewriter.py
 ```
 
-## 📁 파일 구조
+### 3. 배치 처리
 
-```
-blogm/
-├── blog_optimizer_gui.py           # GUI 프로그램
-├── search_optimizer.py             # 최적화 로직
-├── blog_optimizer.py               # 텍스트 유틸리티
-├── 금칙어 수정사항 모음.txt         # 금칙어 목록
-├── blog_optimizer.spec             # PyInstaller 설정
-├── build.bat / build.sh            # 빌드 스크립트
-├── requirements.txt                # Python 패키지 목록
-├── quick_test.py                   # 빠른 테스트
-├── test_optimizer.py               # 대화형 테스트
-├── 사용가이드_EXE.md               # 상세 사용 가이드
-├── 빌드가이드.md                   # 빌드 가이드
-└── README_EXE빌드.md               # EXE 빌드 설명
+```bash
+# 기본 사용 (검수전 시트의 모든 원고 처리)
+python batch_rewrite_manuscripts.py
+
+# 최대 5개만 처리
+python batch_rewrite_manuscripts.py --max-rows 5
+
+# API 키를 직접 전달
+python batch_rewrite_manuscripts.py --api-key 'your-api-key-here'
+
+# 출력 파일명 지정
+python batch_rewrite_manuscripts.py --output '수정결과.xlsx'
 ```
 
-## 📖 상세 문서
+### 4. 원고 검수만 (수정 없이)
 
-- **사용자용**: `사용가이드_EXE.md` 참고
-- **개발자용**: `빌드가이드.md` 참고
-- **EXE 빌드**: `README_EXE빌드.md` 참고
-
-## ⚙️ 최적화 규칙
-
-### 키워드 띄어쓰기
-```
-❌ 고관절영양제에 대해  → ✅ (문장 삭제)
-❌ 고관절영양제를        → ✅ 고관절영양제
-❌ 고관절영양제가        → ✅ 고관절영양제 먹으면
-❌ 고관절영양제라는      → ✅ 고관절영양제 라는 (띄어쓰기)
+```bash
+python manuscript_checker.py
 ```
 
-### 금칙어 치환
-```
-병원 → 센터, 클리닉
-효과 → 약효
-시술 → 치료
-의사 → 담당의, 선생님
-```
+## 파일 구조
 
-### AI 표현 제거
 ```
-정말 고민이 많습니다 → 정말 고민되네요
-절로 나오 → 자연스럽게 나오
-고생하고 있는 → 힘들어하는
+최적화/
+├── auto_manuscript_rewriter.py       # 자동 원고 수정 (Gemini API)
+├── batch_rewrite_manuscripts.py      # 배치 처리
+├── manuscript_checker.py             # 원고 검수 (분석만)
+├── forbidden_words_loader.py         # 금칙어 로더
+├── 블로그 작업_엑셀템플릿.xlsx         # 원고 데이터
+├── 금칙어 리스트.xlsx                 # 금칙어 및 대체어
+└── README.md                         # 이 파일
 ```
 
-## 💡 문의
+## 출력 예시
 
-- GitHub Issues: [이슈 등록](https://github.com/...)
-- 버그 신고 및 기능 제안 환영
+```
+====================================================================================================
+원고 분석 - 키워드: 강남 맛집 추천
+====================================================================================================
+글자수: 356자 (목표: 300~900자)
+첫문단 통키워드: 2회 (목표: 2회)
+통키워드 문장 시작: 2개 (목표: 2개)
 
-## 📝 라이선스
+🤖 Gemini가 원고를 수정 중...
 
-MIT License
+✅ 수정 완료!
+====================================================================================================
+수정 후 상태:
+  글자수: 462자
+  첫문단 통키워드: 2회
+  통키워드 문장 시작: 2개
+```
+
+## 주요 클래스 및 함수
+
+### AutoManuscriptRewriter
+
+```python
+from auto_manuscript_rewriter import AutoManuscriptRewriter
+
+# 초기화
+rewriter = AutoManuscriptRewriter(
+    forbidden_words_file='금칙어 리스트.xlsx',
+    gemini_api_key='your-api-key'
+)
+
+# 원고 수정
+result = rewriter.rewrite_manuscript(
+    manuscript="원고 텍스트...",
+    keyword="강남 맛집 추천",
+    target_whole_str="강남 맛집 추천 : 0",
+    target_pieces_str="강남 : 2\n맛집 : 3\n추천 : 1",
+    target_subkeywords=5
+)
+
+if result['success']:
+    print(result['rewritten'])
+```
+
+### ManuscriptChecker
+
+```python
+from manuscript_checker import ManuscriptChecker
+
+# 초기화
+checker = ManuscriptChecker(forbidden_words_file='금칙어 리스트.xlsx')
+
+# 원고 검수
+result = checker.check_manuscript(
+    manuscript="원고 텍스트...",
+    keyword="강남 맛집 추천",
+    target_whole_str="강남 맛집 추천 : 0",
+    target_pieces_str="강남 : 2\n맛집 : 3",
+    target_subkeywords=5
+)
+
+# 검수 결과
+print(f"합격: {result['pass']}")
+print(f"문제점: {result['issues']}")
+```
+
+## 분석 도구
+
+다음 스크립트들은 회사 기준을 발견하기 위해 사용한 분석 도구입니다:
+
+- `find_c_meaning.py` - C열 글자수 의미 분석
+- `find_sentence_pattern.py` - 문장 패턴 분석
+- `verify_rest_paragraph.py` - 첫 문단/나머지 부분 검증
+- `check_avg_chars.py` - 평균 글자수 계산
+- `analyze_excel.py` - 엑셀 구조 분석
+
+## 통계
+
+검수 후 원고 분석 결과 (20개 샘플):
+- **평균 글자수**: 462자
+- **중간값**: 430자
+- **범위**: 174~1012자
+- **가장 많은 범위**: 300~500자 (55%)
+
+## 주의사항
+
+1. **자연스러운 키워드 추가**: 억지로 반복하지 말고, 문맥에 맞게 자연스럽게 추가
+2. **띄어쓰기 규칙**: 조사를 억지로 띄우지 말고, 문장을 우회해서 작성
+3. **문체 유지**: 원본의 말투와 느낌 유지
+4. **금칙어 주의**: 금칙어는 절대 사용 금지
+
+## 라이선스
+
+Company Internal Use Only
 
 ---
 
-**버전**: 1.0
+**버전**: 2.0 (회사 기준 기반)
 **최종 업데이트**: 2025-11-13
