@@ -27,7 +27,7 @@ class AutoManuscriptRewriter:
             raise ValueError("GEMINI_API_KEY 환경변수를 설정하거나 gemini_api_key 파라미터를 전달하세요.")
 
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.5-pro')
 
     def load_forbidden_words(self):
         """금칙어 리스트 로드"""
@@ -180,11 +180,13 @@ class AutoManuscriptRewriter:
 
 키워드: **{keyword}**
 
-**규칙 1: 첫 문단에 "{keyword}" 정확히 2번**
+**규칙 1: 첫 문단에 [{keyword}] 정확히 2번**
 - 0번 ❌ / 1번 ❌ / 2번 ✅ / 3번 ❌
+- ⚠️ 3번 이상 쓰면 실격! 반드시 정확히 2번만!
 
-**규칙 2: 전체 원고에서 "{keyword}"로 시작하는 문장 정확히 2개**
+**규칙 2: 전체 원고에서 [{keyword}]로 시작하는 문장 정확히 2개**
 - 0개 ❌ / 1개 ❌ / 2개 ✅ / 3개 ❌
+- ⚠️ 3개 이상 쓰면 실격! 반드시 정확히 2개만!
 
 **규칙 3: 글자수 300~900자** (공백/줄바꿈 제외)
 
@@ -192,23 +194,23 @@ class AutoManuscriptRewriter:
 🚫 절대 금지 패턴 (카운팅 안 됨!)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-❌ "{keyword}**에** 대해" (조사 붙음)
-❌ "{keyword}**에** 대한" (조사 붙음)
-❌ "{keyword}**에서**" (조사 붙음)
-❌ "{keyword}**이라는**" (조사 붙음)
-❌ "{keyword}**라는**" (조사 붙음)
-❌ "{keyword}**를**" (조사 붙음)
-❌ "{keyword}**을**" (조사 붙음)
-❌ "{keyword}**가**" (조사 붙음)
-❌ "{keyword}**이**" (조사 붙음)
-❌ "{keyword}**도**" (조사 붙음)
+❌ {keyword}**에** 대해 (조사 붙음)
+❌ {keyword}**에** 대한 (조사 붙음)
+❌ {keyword}**에서** (조사 붙음)
+❌ {keyword}**이라는** (조사 붙음)
+❌ {keyword}**라는** (조사 붙음)
+❌ {keyword}**를** (조사 붙음)
+❌ {keyword}**을** (조사 붙음)
+❌ {keyword}**가** (조사 붙음)
+❌ {keyword}**이** (조사 붙음)
+❌ {keyword}**도** (조사 붙음)
 
-✅ "{keyword} 관련해서" (띄어쓰기!)
-✅ "{keyword} 때문에" (띄어쓰기!)
-✅ "{keyword} 후기를" (띄어쓰기!)
-✅ "{keyword} 정보가" (띄어쓰기!)
-✅ "{keyword}," (마침표/쉼표 OK)
-✅ "{keyword}." (마침표/쉼표 OK)
+✅ {keyword} 관련해서 (띄어쓰기!)
+✅ {keyword} 때문에 (띄어쓰기!)
+✅ {keyword} 후기를 (띄어쓰기!)
+✅ {keyword} 정보가 (띄어쓰기!)
+✅ {keyword}, (마침표/쉼표 OK)
+✅ {keyword}. (마침표/쉼표 OK)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📝 구체적 예시 (이렇게 작성하세요)
@@ -218,21 +220,23 @@ class AutoManuscriptRewriter:
 
 {keyword} 관련해서 고민이 많습니다. 저는 50대 중반인데요, 최근 여러 증상으로 힘들어하고 있습니다. {keyword} 정보를 찾아보니 여러 방법이 있더라고요.
 
-→ "{keyword} 관련해서" (1번 카운팅 ✅)
-→ "{keyword} 정보를" (2번 카운팅 ✅)
+→ [{keyword} 관련해서] (1번 카운팅 ✅)
+→ [{keyword} 정보를] (2번 카운팅 ✅)
 
 **잘못된 첫 문단 예시 (0번 카운팅됨):**
 
 {keyword}에 대해 궁금한 점이 있습니다. {keyword}에서 상담을 받으려고 하는데요.
 
-→ "{keyword}에" (조사 붙음 ❌ 카운팅 안됨!)
-→ "{keyword}에서" (조사 붙음 ❌ 카운팅 안됨!)
+→ [{keyword}에] (조사 붙음 ❌ 카운팅 안됨!)
+→ [{keyword}에서] (조사 붙음 ❌ 카운팅 안됨!)
 
-**문장 시작 예시 (정확히 2개):**
+**문장 시작 예시 (정확히 2개만!):**
 
 {keyword} 후기를 찾아보다가 이렇게 글을 남깁니다.
 ...
 {keyword} 관련해서 궁금한 점이 있으면 언제든지 문의해주세요.
+
+⚠️ 주의: 3개 이상 만들면 안 됩니다! 정확히 2개만!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 원본 원고
@@ -246,11 +250,13 @@ class AutoManuscriptRewriter:
 
 작성 후 직접 세어보세요:
 
-1. 첫 문단에서 "{keyword} " (띄어쓰기) 또는 "{keyword}." (마침표) 패턴이 정확히 2번?
-   → "{keyword}에", "{keyword}를" 같은 건 카운팅 안 됨!
+1. 첫 문단에서 [{keyword} ] (띄어쓰기) 또는 [{keyword}.] (마침표) 패턴이 정확히 2번?
+   → [{keyword}에], [{keyword}를] 같은 건 카운팅 안 됨!
+   → 3번 이상 쓰면 실격!
 
-2. 줄 맨 앞에 "{keyword}"로 시작하는 문장이 정확히 2개?
-   → "{keyword}에 대해..."로 시작하면 안 됨!
+2. 줄 맨 앞에 [{keyword}]로 시작하는 문장이 정확히 2개?
+   → [{keyword}에 대해...]로 시작하면 안 됨!
+   → 3개 이상 쓰면 실격!
 
 3. 글자수 300~900자? (공백/줄바꿈 제외)
 
@@ -364,8 +370,8 @@ class AutoManuscriptRewriter:
 
 키워드: **{keyword}**
 
-첫 문단 "{keyword}" 카운팅: {first_para_count}회 (목표: 정확히 2회) {'✅' if first_para_count == 2 else '❌'}
-문장 시작 "{keyword}" 개수: {sentence_start_count}개 (목표: 정확히 2개) {'✅' if sentence_start_count == 2 else '❌'}
+첫 문단 [{keyword}] 카운팅: {first_para_count}회 (목표: 정확히 2회) {'✅' if first_para_count == 2 else '❌'}
+문장 시작 [{keyword}] 개수: {sentence_start_count}개 (목표: 정확히 2개) {'✅' if sentence_start_count == 2 else '❌'}
 
 **이전에 작성한 원고:**
 {failed_text}
@@ -374,17 +380,19 @@ class AutoManuscriptRewriter:
 🎯 다시 작성 시 주의사항
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-**규칙 1: 첫 문단에 "{keyword}" 정확히 2번**
+**규칙 1: 첫 문단에 [{keyword}] 정확히 2번**
 - 현재: {first_para_count}번 → 목표: 2번
+- ⚠️ 3번 이상 절대 안 됨!
 
-**규칙 2: "{keyword}"로 시작하는 문장 정확히 2개**
+**규칙 2: [{keyword}]로 시작하는 문장 정확히 2개**
 - 현재: {sentence_start_count}개 → 목표: 2개
+- ⚠️ 3개 이상 절대 안 됨!
 
 **절대 금지 패턴 (조사 붙으면 카운팅 안 됨!):**
-❌ "{keyword}에" ❌ "{keyword}에서" ❌ "{keyword}를" ❌ "{keyword}가"
+❌ {keyword}에 ❌ {keyword}에서 ❌ {keyword}를 ❌ {keyword}가
 
 **올바른 패턴 (띄어쓰기!):**
-✅ "{keyword} 관련해서" ✅ "{keyword} 때문에" ✅ "{keyword} 후기를"
+✅ {keyword} 관련해서 ✅ {keyword} 때문에 ✅ {keyword} 후기를
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 원본 원고
@@ -396,8 +404,8 @@ class AutoManuscriptRewriter:
 ✅ 이번엔 반드시 규칙 준수!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. 첫 문단에서 "{keyword} " (띄어쓰기) 패턴을 정확히 2번 사용
-2. 줄 맨 앞에 "{keyword} "로 시작하는 문장을 정확히 2개 작성
+1. 첫 문단에서 [{keyword} ] (띄어쓰기) 패턴을 정확히 2번 사용 (3번 안 됨!)
+2. 줄 맨 앞에 [{keyword} ]로 시작하는 문장을 정확히 2개 작성 (3개 안 됨!)
 3. 조사 절대 금지!
 
 수정된 원고만 출력하세요 (설명 없이).
