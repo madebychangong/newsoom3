@@ -119,22 +119,24 @@ class AutoManuscriptRewriter:
         return count
 
     def count_sentences_between_keywords(self, paragraph: str, keyword: str) -> int:
-        """첫 문단에서 키워드 사이 문장 개수"""
+        """첫 문단에서 키워드 사이 문장 개수 (온점, 쉼표 기준)"""
         if not keyword or not paragraph:
             return 0
 
-        sentences = []
-        for line in paragraph.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('#'):
-                # 문장 분리 (., !, ? 기준)
-                parts = re.split(r'[.!?]\s*', line)
-                sentences.extend([s.strip() for s in parts if s.strip()])
+        # 제목 제거
+        text = '\n'.join([line for line in paragraph.split('\n') if not line.strip().startswith('#')])
+
+        # 온점(.)과 쉼표(,)로 문장 분리
+        sentences = re.split(r'[.,]\s*', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+
+        # 정규식으로 정확한 키워드 매칭 (띄어쓰기 체크)
+        keyword_pattern = rf'{re.escape(keyword)}(?=\s|[^\w가-힣]|$)'
 
         # 키워드 포함 문장 인덱스 찾기
         keyword_indices = []
         for i, sentence in enumerate(sentences):
-            if keyword in sentence:
+            if re.search(keyword_pattern, sentence):
                 keyword_indices.append(i)
 
         # 첫 번째와 두 번째 키워드 사이 문장 개수
@@ -212,14 +214,11 @@ class AutoManuscriptRewriter:
             diff = 첫문단_count - 2
             actions.append(f"첫 문단에서 [{keyword}] {diff}회 제거 (현재 {첫문단_count}회 → 목표 정확히 2회)")
 
-        # 3. 문장 시작 (정확히 2개)
+        # 3. 문장 시작 (최소 2개 이상)
         문장시작_count = analysis['통키워드_문장시작']
         if 문장시작_count < 2:
             diff = 2 - 문장시작_count
-            actions.append(f"[{keyword}]로 시작하는 문장 {diff}개 더 추가 (현재 {문장시작_count}개 → 목표 정확히 2개)")
-        elif 문장시작_count > 2:
-            diff = 문장시작_count - 2
-            actions.append(f"[{keyword}]로 시작하는 문장 {diff}개 제거 (현재 {문장시작_count}개 → 목표 정확히 2개)")
+            actions.append(f"[{keyword}]로 시작하는 문장 {diff}개 더 추가 (현재 {문장시작_count}개 → 목표 최소 2개 이상)")
 
         # 4. 첫문단 키워드 사이 문장 (최소 2개)
         키워드사이_count = analysis['첫문단_키워드사이_문장수']
@@ -339,13 +338,13 @@ class AutoManuscriptRewriter:
    ✅ {keyword} 관련해서, {keyword} 때문에 (띄어쓰기!)
 
 2. 문장 시작 규칙 (중요!):
-   - 줄 맨 앞에서 [{keyword}]로 시작하는 문장 정확히 2개 필수
+   - 줄 맨 앞에서 [{keyword}]로 시작하는 문장 최소 2개 이상 (많아도 OK)
    - 예시: "{keyword} 때문에 고민입니다." (줄 맨 앞에서 시작)
    - 예시: "{keyword} 관련해서 알아보고 있어요." (줄 맨 앞에서 시작)
 
 3. 첫 문단 구조 (중요!):
-   - 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장 배치
-   - 예시: "{keyword} 때문에 고민입니다. (문장1) 이것저것 알아봤어요. (문장2) 정말 힘드네요. (문장3) {keyword} 정보를 찾고 있습니다."
+   - 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장 배치 (온점, 쉼표로 구분)
+   - 예시: "{keyword} 때문에 고민입니다. 이것저것 알아봤어요, 정말 힘드네요. {keyword} 정보를 찾고 있습니다."
 
 4. 원본 글 흐름 최대한 유지
    - 키워드만 추가/제거/위치 조정
@@ -353,6 +352,12 @@ class AutoManuscriptRewriter:
 
 5. 도입부: 고민이나 불편함 표현
 6. 마무리: 댓글 유도 또는 정보 공유 요청
+
+7. 글의 자연스러움 (중요!):
+   - 키워드가 억지로 끼워 넣어진 느낌이 들면 안 됨
+   - 자연스럽고 대화체처럼 편안한 문장
+   - 예시 (부자연): "팔꿈치 쿠션 보호대 좋습니다. 팔꿈치 쿠션 보호대 추천합니다."
+   - 예시 (자연): "팔꿈치 쿠션 보호대 때문에 고민입니다. 운동할 때 팔꿈치가 자꾸 아파서요. 좋은 제품 있으면 추천 부탁드립니다."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 원본 원고
@@ -366,11 +371,11 @@ class AutoManuscriptRewriter:
 
 출력 전에 반드시 확인:
 1. 첫 문단에 [{keyword} ] (띄어쓰기) 정확히 2번?
-2. 줄 맨 앞에서 [{keyword}]로 시작하는 문장 정확히 2개?
+2. 줄 맨 앞에서 [{keyword}]로 시작하는 문장 최소 2개 이상?
    → 예: "{keyword} 때문에..." (줄 시작)
    → 예: "{keyword} 관련해서..." (줄 시작)
-3. 첫 문단에서 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장?
-   → 예: "{keyword}...문장1...문장2...{keyword}..."
+3. 첫 문단에서 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장? (온점, 쉼표 기준)
+   → 예: "{keyword} 때문에 고민입니다. 이것저것 알아봤어요, 정말 힘드네요. {keyword} 정보를 찾고 있습니다."
 4. 글자수 300~900자?
 
 위 항목을 직접 세어보고 맞으면 수정된 원고만 출력하세요 (설명 없이).
@@ -379,8 +384,8 @@ class AutoManuscriptRewriter:
 
     def rewrite_manuscript(self, manuscript: str, keyword: str,
                           target_whole_str: str, target_pieces_str: str,
-                          target_subkeywords: int, max_retries: int = 3) -> Dict:
-        """원고 자동 수정 (재시도 로직 포함)"""
+                          target_subkeywords: int) -> Dict:
+        """원고 자동 수정 (한 번만 시도)"""
 
         # 1. 분석
         analysis = self.analyze_manuscript(manuscript, keyword, target_whole_str,
@@ -391,137 +396,136 @@ class AutoManuscriptRewriter:
         print(f"{'=' * 100}")
         print(f"글자수: {analysis['chars']}자 (목표: 300~900자)")
         print(f"첫문단 통키워드: {analysis['첫문단_통키워드']}회 (목표: 2회)")
-        print(f"통키워드 문장 시작: {analysis['통키워드_문장시작']}개 (목표: 2개)")
+        print(f"통키워드 문장 시작: {analysis['통키워드_문장시작']}개 (목표: 최소 2개 이상)")
 
-        # 재시도 루프
-        rewritten = None  # 초기화
-        after_analysis = None  # 초기화
+        print(f"\n🤖 Gemini가 원고를 수정 중...")
 
-        for attempt in range(max_retries):
-            print(f"\n🤖 Gemini가 원고를 수정 중... (시도 {attempt + 1}/{max_retries})")
+        try:
+            # 2. 프롬프트 생성
+            prompt = self.create_rewrite_prompt(manuscript, keyword, analysis,
+                                               target_whole_str, target_pieces_str)
 
-            try:
-                # 2. 프롬프트 생성
-                if attempt == 0 or rewritten is None:
-                    # 첫 시도이거나 이전 시도에서 rewritten이 없으면 기본 프롬프트
-                    prompt = self.create_rewrite_prompt(manuscript, keyword, analysis,
-                                                       target_whole_str, target_pieces_str)
-                else:
-                    # 재시도 시 이전 실패 이유 포함
-                    prompt = self.create_retry_prompt(manuscript, keyword, rewritten,
-                                                     after_analysis, target_whole_str,
-                                                     target_pieces_str)
+            # 3. Gemini로 수정
+            response = self.model.generate_content(prompt)
+            rewritten = response.text.strip()
 
-                # 3. Gemini로 수정
-                response = self.model.generate_content(prompt)
-                rewritten = response.text.strip()
+            # 4. 수정 후 재분석
+            after_analysis = self.analyze_manuscript(rewritten, keyword, target_whole_str,
+                                                    target_pieces_str, target_subkeywords)
 
-                # 4. 수정 후 재분석
-                after_analysis = self.analyze_manuscript(rewritten, keyword, target_whole_str,
-                                                        target_pieces_str, target_subkeywords)
+            # 5. 검증 - ALL 7개 기준을 정확히 체크
+            first_para_ok = after_analysis['첫문단_통키워드'] == 2
+            sentence_start_ok = after_analysis['통키워드_문장시작'] >= 2  # 2개 이상이면 OK
+            키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2
+            chars_ok = after_analysis['chars_in_range']
 
-                # 5. 검증 - ALL 7개 기준을 정확히 체크
-                first_para_ok = after_analysis['첫문단_통키워드'] == 2
-                sentence_start_ok = after_analysis['통키워드_문장시작'] == 2
-                키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2
-                chars_ok = after_analysis['chars_in_range']
+            # 나머지 통키워드 검증 (최소 이상이어야 함 - 넘어가는 건 OK)
+            나머지_통키워드_ok = True
+            나머지_통키워드_errors = []
+            for kw, data in after_analysis['나머지_통키워드'].items():
+                if data['actual'] < data['target']:
+                    나머지_통키워드_ok = False
+                    나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
 
-                # 나머지 통키워드 검증 (최소 이상이어야 함 - 넘어가는 건 OK)
-                나머지_통키워드_ok = True
-                나머지_통키워드_errors = []
+            # 조각키워드 검증 (목표 이상이어야 함 - 넘어가는 건 OK)
+            조각키워드_ok = True
+            조각키워드_errors = []
+            for kw, data in after_analysis['나머지_조각키워드'].items():
+                if data['actual'] < data['target']:
+                    조각키워드_ok = False
+                    조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+
+            # 서브키워드 검증 (목표 이상이어야 함)
+            서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
+
+            # ALL 7개 기준이 모두 충족되어야 성공
+            all_criteria_met = (first_para_ok and sentence_start_ok and 키워드사이_문장수_ok and
+                               chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok)
+
+            print(f"\n{'=' * 100}")
+            print(f"수정 후 검증 결과:")
+            print(f"  1. 글자수: {after_analysis['chars']}자 {'✅' if chars_ok else '❌'}")
+            print(f"  2. 첫문단 통키워드: {after_analysis['첫문단_통키워드']}회 {'✅' if first_para_ok else '❌'}")
+            print(f"  3. 통키워드 문장 시작: {after_analysis['통키워드_문장시작']}개 {'✅' if sentence_start_ok else '❌'}")
+            print(f"  4. 첫문단 키워드 사이 문장: {after_analysis['첫문단_키워드사이_문장수']}개 (최소 2개) {'✅' if 키워드사이_문장수_ok else '❌'}")
+
+            # 나머지 통키워드 출력
+            print(f"  5. 나머지 통키워드: {'✅' if 나머지_통키워드_ok else '❌'}")
+            if not 나머지_통키워드_ok:
+                for err in 나머지_통키워드_errors:
+                    print(f"     - {err}")
+            elif after_analysis['나머지_통키워드']:
                 for kw, data in after_analysis['나머지_통키워드'].items():
-                    if data['actual'] < data['target']:
-                        나머지_통키워드_ok = False
-                        나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                    print(f"     - {kw}: {data['actual']}/{data['target']}회 ✅")
 
-                # 조각키워드 검증 (목표 이상이어야 함 - 넘어가는 건 OK)
-                조각키워드_ok = True
-                조각키워드_errors = []
+            # 조각키워드 출력
+            print(f"  6. 조각키워드: {'✅' if 조각키워드_ok else '❌'}")
+            if not 조각키워드_ok:
+                for err in 조각키워드_errors:
+                    print(f"     - {err}")
+            elif after_analysis['나머지_조각키워드']:
                 for kw, data in after_analysis['나머지_조각키워드'].items():
-                    if data['actual'] < data['target']:
-                        조각키워드_ok = False
-                        조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                    print(f"     - {kw}: {data['actual']}/{data['target']}회 ✅")
 
-                # 서브키워드 검증 (목표 이상이어야 함)
-                서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
+            # 서브키워드 출력
+            print(f"  7. 서브키워드 목록: {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok else '❌'}")
 
-                # ALL 7개 기준이 모두 충족되어야 성공
-                all_criteria_met = (first_para_ok and sentence_start_ok and 키워드사이_문장수_ok and
-                                   chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok)
+            # ALL 기준 충족 여부 확인
+            if all_criteria_met:
+                print(f"\n✅ 성공! 모든 기준 충족 (7/7)")
+                return {
+                    'success': True,
+                    'original': manuscript,
+                    'rewritten': rewritten,
+                    'before_analysis': analysis,
+                    'after_analysis': after_analysis
+                }
+            else:
+                # 실패한 기준 표시
+                failed_count = sum([
+                    not chars_ok,
+                    not first_para_ok,
+                    not sentence_start_ok,
+                    not 키워드사이_문장수_ok,
+                    not 나머지_통키워드_ok,
+                    not 조각키워드_ok,
+                    not 서브키워드_ok
+                ])
+                print(f"\n⚠️ 기준 미달 ({7-failed_count}/7 충족) - 그대로 저장")
 
-                print(f"\n{'=' * 100}")
-                print(f"수정 후 검증 결과:")
-                print(f"  1. 글자수: {after_analysis['chars']}자 {'✅' if chars_ok else '❌'}")
-                print(f"  2. 첫문단 통키워드: {after_analysis['첫문단_통키워드']}회 {'✅' if first_para_ok else '❌'}")
-                print(f"  3. 통키워드 문장 시작: {after_analysis['통키워드_문장시작']}개 {'✅' if sentence_start_ok else '❌'}")
-                print(f"  4. 첫문단 키워드 사이 문장: {after_analysis['첫문단_키워드사이_문장수']}개 (최소 2개) {'✅' if 키워드사이_문장수_ok else '❌'}")
-
-                # 나머지 통키워드 출력
-                print(f"  5. 나머지 통키워드: {'✅' if 나머지_통키워드_ok else '❌'}")
+                # 실패 이유 수집
+                error_messages = []
+                if not first_para_ok:
+                    error_messages.append(f"첫문단 통키워드 {after_analysis['첫문단_통키워드']}회 (목표: 2회)")
+                if not sentence_start_ok:
+                    error_messages.append(f"문장 시작 {after_analysis['통키워드_문장시작']}개 (목표: 최소 2개 이상)")
+                if not 키워드사이_문장수_ok:
+                    error_messages.append(f"키워드 사이 문장 {after_analysis['첫문단_키워드사이_문장수']}개 (목표: 최소 2개)")
+                if not chars_ok:
+                    error_messages.append(f"글자수 {after_analysis['chars']}자 (목표: 300~900자)")
                 if not 나머지_통키워드_ok:
-                    for err in 나머지_통키워드_errors:
-                        print(f"     - {err}")
-                else:
-                    for kw, data in after_analysis['나머지_통키워드'].items():
-                        print(f"     - {kw}: {data['actual']}/{data['target']}회 ✅")
-
-                # 조각키워드 출력
-                print(f"  6. 조각키워드: {'✅' if 조각키워드_ok else '❌'}")
+                    error_messages.extend(나머지_통키워드_errors)
                 if not 조각키워드_ok:
-                    for err in 조각키워드_errors:
-                        print(f"     - {err}")
-                else:
-                    for kw, data in after_analysis['나머지_조각키워드'].items():
-                        print(f"     - {kw}: {data['actual']}/{data['target']}회 ✅")
+                    error_messages.extend(조각키워드_errors)
+                if not 서브키워드_ok:
+                    error_messages.append(f"서브키워드 {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상)")
 
-                # 서브키워드 출력
-                print(f"  7. 서브키워드 목록: {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok else '❌'}")
+                return {
+                    'success': False,
+                    'error': ', '.join(error_messages),
+                    'original': manuscript,
+                    'rewritten': rewritten,
+                    'before_analysis': analysis,
+                    'after_analysis': after_analysis
+                }
 
-                # ALL 기준 충족 여부 확인
-                if all_criteria_met:
-                    print(f"\n✅ 성공! 모든 기준 충족 (7/7)")
-                    return {
-                        'success': True,
-                        'original': manuscript,
-                        'rewritten': rewritten,
-                        'before_analysis': analysis,
-                        'after_analysis': after_analysis,
-                        'attempts': attempt + 1
-                    }
-                else:
-                    # 실패한 기준 표시
-                    failed_count = sum([
-                        not chars_ok,
-                        not first_para_ok,
-                        not sentence_start_ok,
-                        not 키워드사이_문장수_ok,
-                        not 나머지_통키워드_ok,
-                        not 조각키워드_ok,
-                        not 서브키워드_ok
-                    ])
-                    print(f"\n⚠️ 기준 미달 ({7-failed_count}/7 충족), 재시도 필요...")
-                    continue
-
-            except Exception as e:
-                print(f"❌ 수정 실패: {e}")
-                if attempt == max_retries - 1:
-                    return {
-                        'success': False,
-                        'error': str(e),
-                        'original': manuscript
-                    }
-                continue
-
-        # 최대 재시도 횟수 초과
-        print(f"⚠️ {max_retries}회 시도 후에도 기준 미달")
-        return {
-            'success': False,
-            'error': f'{max_retries}회 재시도 후에도 기준 충족 실패',
-            'original': manuscript,
-            'rewritten': rewritten,
-            'after_analysis': after_analysis,
-            'attempts': max_retries
-        }
+        except Exception as e:
+            print(f"❌ 수정 실패: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'original': manuscript
+            }
 
     def create_retry_prompt(self, original: str, keyword: str, failed_text: str,
                            failed_analysis: Dict, target_whole_str: str,
@@ -588,11 +592,11 @@ class AutoManuscriptRewriter:
 
 출력 전에 반드시 확인:
 1. 첫 문단에 [{keyword} ] (띄어쓰기) 정확히 2번?
-2. 줄 맨 앞에서 [{keyword}]로 시작하는 문장 정확히 2개?
+2. 줄 맨 앞에서 [{keyword}]로 시작하는 문장 최소 2개 이상?
    → 예: "{keyword} 때문에..." (줄 시작)
    → 예: "{keyword} 관련해서..." (줄 시작)
-3. 첫 문단에서 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장?
-   → 예: "{keyword}...문장1...문장2...{keyword}..."
+3. 첫 문단에서 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장? (온점, 쉼표 기준)
+   → 예: "{keyword} 때문에 고민입니다. 이것저것 알아봤어요, 정말 힘드네요. {keyword} 정보를 찾고 있습니다."
 4. 글자수 300~900자?
 
 위 항목을 직접 세어보고 맞으면 수정된 원고만 출력하세요 (설명 없이).
