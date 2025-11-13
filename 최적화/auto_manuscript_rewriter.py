@@ -72,14 +72,35 @@ class AutoManuscriptRewriter:
         return len(re.findall(pattern, text))
 
     def count_sentences_starting_with(self, text: str, keyword: str) -> int:
-        """키워드로 시작하는 문장(줄) 개수"""
+        """키워드로 시작하는 문장 개수 (., !, ? 기준으로 문장 분리)"""
         if not keyword:
             return 0
-        count = 0
+
+        # 문장 분리
+        sentences = []
         for line in text.split('\n'):
             line = line.strip()
-            if line.startswith(keyword):
+            if line and not line.startswith('#'):
+                # 문장 분리 (., !, ? 기준)
+                parts = re.split(r'([.!?])\s*', line)
+                current = ""
+                for i, part in enumerate(parts):
+                    if part in '.!?':
+                        current += part
+                        if current.strip():
+                            sentences.append(current.strip())
+                        current = ""
+                    else:
+                        current += part
+                if current.strip():
+                    sentences.append(current.strip())
+
+        # 키워드로 시작하는 문장 카운팅
+        count = 0
+        for sentence in sentences:
+            if sentence.startswith(keyword):
                 count += 1
+
         return count
 
     def count_sentences_between_keywords(self, paragraph: str, keyword: str) -> int:
@@ -270,7 +291,7 @@ class AutoManuscriptRewriter:
 🔴 규칙 {rule_num}: 조각키워드 (첫 문단 이후)"""
             for kw, data in analysis['나머지_조각키워드'].items():
                 prompt += f"""
-   - [{kw}] 정확히 {data['target']}회 (±1도 안 됨!)"""
+   - [{kw}] 최소 {data['target']}회 이상 (많아도 OK, 모자라면 실격!)"""
             rule_num += 1
 
         # 서브키워드
@@ -400,13 +421,13 @@ class AutoManuscriptRewriter:
                         나머지_통키워드_ok = False
                         나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회)")
 
-                # 조각키워드 검증 (모든 조각키워드가 정확히 목표 횟수와 일치해야 함)
+                # 조각키워드 검증 (목표 이상이어야 함 - 넘어가는 건 OK)
                 조각키워드_ok = True
                 조각키워드_errors = []
                 for kw, data in after_analysis['나머지_조각키워드'].items():
-                    if data['actual'] != data['target']:
+                    if data['actual'] < data['target']:
                         조각키워드_ok = False
-                        조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회)")
+                        조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
 
                 # 서브키워드 검증 (목표 이상이어야 함)
                 서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
@@ -509,8 +530,8 @@ class AutoManuscriptRewriter:
         # 조각키워드 상태
         조각키워드_status = []
         for kw, data in failed_analysis['나머지_조각키워드'].items():
-            icon = '✅' if data['actual'] == data['target'] else '❌'
-            조각키워드_status.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회) {icon}")
+            icon = '✅' if data['actual'] >= data['target'] else '❌'
+            조각키워드_status.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상) {icon}")
 
         # 서브키워드 상태
         sub_actual = failed_analysis['subkeywords']['actual']
