@@ -35,6 +35,7 @@ class ManuscriptGUI:
         self.gemini_api_key = tk.StringVar()
         self.input_file = tk.StringVar()
         self.max_rows = tk.IntVar(value=0)  # 0 = 전체
+        self.model_choice = tk.IntVar(value=1)  # 1 = pro (기본), 2 = flash
 
         # Rewriter (나중에 초기화)
         self.rewriter = None
@@ -141,6 +142,31 @@ class ManuscriptGUI:
             text="(0 = 전체 처리)",
             font=("맑은 고딕", 8),
             foreground="gray"
+        ).grid(row=0, column=1)
+
+        # ─────────────────────────────────────────────────
+        # 4. AI 모델 선택
+        # ─────────────────────────────────────────────────
+        row += 1
+        ttk.Label(main_frame, text="🤖 AI 모델:", font=("맑은 고딕", 10)).grid(
+            row=row, column=0, sticky=tk.W, pady=5
+        )
+
+        model_frame = ttk.Frame(main_frame)
+        model_frame.grid(row=row, column=1, columnspan=2, sticky=tk.W, pady=5)
+
+        ttk.Radiobutton(
+            model_frame,
+            text="gemini-2.5-pro (고품질, 느림)",
+            variable=self.model_choice,
+            value=1
+        ).grid(row=0, column=0, padx=(0, 20))
+
+        ttk.Radiobutton(
+            model_frame,
+            text="gemini-2.0-flash-exp (빠름, 저렴)",
+            variable=self.model_choice,
+            value=2
         ).grid(row=0, column=1)
 
         # 구분선
@@ -319,10 +345,11 @@ class ManuscriptGUI:
         try:
             # Rewriter 초기화
             api_key = self.gemini_api_key.get()
+            model_choice = self.model_choice.get()
             self.log("🤖 Gemini API 초기화 중...")
 
             try:
-                self.rewriter = AutoManuscriptRewriter(gemini_api_key=api_key)
+                self.rewriter = AutoManuscriptRewriter(gemini_api_key=api_key, model_choice=model_choice)
                 self.log("✅ Gemini API 초기화 완료")
                 self.log("")
             except Exception as e:
