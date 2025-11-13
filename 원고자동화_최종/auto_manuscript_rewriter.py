@@ -205,14 +205,11 @@ class AutoManuscriptRewriter:
         elif chars > 900:
             actions.append(f"글자수 {chars - 900}자 줄이기 (현재 {chars}자 → 목표 300~900자)")
 
-        # 2. 첫문단 통키워드 (정확히 2회)
+        # 2. 첫문단 통키워드 (2회 이상, 3회도 OK)
         첫문단_count = analysis['첫문단_통키워드']
         if 첫문단_count < 2:
             diff = 2 - 첫문단_count
-            actions.append(f"첫 문단에 [{keyword}] {diff}회 더 추가 (현재 {첫문단_count}회 → 목표 정확히 2회)")
-        elif 첫문단_count > 2:
-            diff = 첫문단_count - 2
-            actions.append(f"첫 문단에서 [{keyword}] {diff}회 제거 (현재 {첫문단_count}회 → 목표 정확히 2회)")
+            actions.append(f"첫 문단에 [{keyword}] {diff}회 더 추가 (현재 {첫문단_count}회 → 목표 2회 이상)")
 
         # 3. 문장 시작 (최소 2개 이상)
         문장시작_count = analysis['통키워드_문장시작']
