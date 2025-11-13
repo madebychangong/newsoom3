@@ -235,8 +235,8 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
                     for kw, data in after_조각키워드.items():
                         target = data.get('target', 0)
                         actual = data.get('actual', 0)
-                        icon = '✅' if actual == target else '❌'
-                        f.write(f"  조각 [{kw}]: {actual}회 (목표: {target}회) {icon}\n")
+                        icon = '✅' if actual >= target else '❌'
+                        f.write(f"  조각 [{kw}]: {actual}회 (목표: {target}회 이상) {icon}\n")
 
                 # 서브키워드
                 after_서브키워드 = r.get('after_서브키워드', {})
