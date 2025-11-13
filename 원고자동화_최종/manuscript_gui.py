@@ -395,14 +395,13 @@ class ManuscriptGUI:
 
                 self.log(f"[{idx+1}/{total_rows}] {keyword} 처리 중...")
 
-                # 원고 수정
+                # 원고 수정 (한 번만 시도)
                 result = self.rewriter.rewrite_manuscript(
                     manuscript=원고,
                     keyword=keyword,
                     target_whole_str=target_whole,
                     target_pieces_str=target_pieces,
-                    target_subkeywords=target_subkeywords,
-                    max_retries=1
+                    target_subkeywords=target_subkeywords
                 )
 
                 if result['success']:
