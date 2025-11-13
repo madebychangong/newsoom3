@@ -362,8 +362,8 @@ class AutoManuscriptRewriter:
    - 예시: "{keyword} 정보를 찾고 있는데요." (줄 맨 앞에서 시작)
 
 4. 첫 문단 구조:
-   - 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장 배치 (온점, 쉼표로 구분)
-   - 예시: "{keyword} 관련해서 알아보고 있어요. 이것저것 검색해봤는데, 정보가 너무 많아서 헷갈리네요. {keyword} 사용해보신 분 계시나요?"
+   - 첫 번째 [{keyword}]와 두 번째 [{keyword}] 사이에 최소 2문장 이상 배치 (온점, 쉼표로 구분)
+   - 예시: "{keyword} 관련해서 알아보고 있어요. 이것저것 검색해봤는데요. {keyword} 사용해보신 분 계시나요?"
 
 5. 원본 글 흐름 최대한 유지
    - 키워드만 추가/제거/위치 조정
@@ -451,9 +451,9 @@ class AutoManuscriptRewriter:
                                                     target_pieces_str, target_subkeywords)
 
             # 5. 검증 - ALL 7개 기준을 정확히 체크
-            first_para_ok = after_analysis['첫문단_통키워드'] == 2
+            first_para_ok = after_analysis['첫문단_통키워드'] >= 2  # 2회 이상이면 OK (3회도 괜찮음)
             sentence_start_ok = after_analysis['통키워드_문장시작'] >= 2  # 2개 이상이면 OK
-            키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2
+            키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2  # 최소 2개 (1개는 ❌)
             chars_ok = after_analysis['chars_in_range']
 
             # 나머지 통키워드 검증 (최소 이상이어야 함 - 넘어가는 건 OK)
@@ -484,9 +484,9 @@ class AutoManuscriptRewriter:
                                chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok and 금칙어_ok)
 
             print(f"\n{'=' * 100}")
-            print(f"수정 후 검증 결과:")
+            print(f"1차 시도 검증 결과:")
             print(f"  1. 글자수: {after_analysis['chars']}자 {'✅' if chars_ok else '❌'}")
-            print(f"  2. 첫문단 통키워드: {after_analysis['첫문단_통키워드']}회 {'✅' if first_para_ok else '❌'}")
+            print(f"  2. 첫문단 통키워드: {after_analysis['첫문단_통키워드']}회 (목표: 2회 이상) {'✅' if first_para_ok else '❌'}")
             print(f"  3. 통키워드 문장 시작: {after_analysis['통키워드_문장시작']}개 {'✅' if sentence_start_ok else '❌'}")
             print(f"  4. 첫문단 키워드 사이 문장: {after_analysis['첫문단_키워드사이_문장수']}개 (최소 2개) {'✅' if 키워드사이_문장수_ok else '❌'}")
 
@@ -519,7 +519,7 @@ class AutoManuscriptRewriter:
 
             # ALL 기준 충족 여부 확인
             if all_criteria_met:
-                print(f"\n✅ 성공! 모든 기준 충족 (8/8)")
+                print(f"\n✅ 1차 시도 성공! 모든 기준 충족 (8/8)")
                 return {
                     'success': True,
                     'original': manuscript,
@@ -539,36 +539,133 @@ class AutoManuscriptRewriter:
                     not 서브키워드_ok,
                     not 금칙어_ok
                 ])
-                print(f"\n⚠️ 기준 미달 ({8-failed_count}/8 충족) - 그대로 저장")
+                print(f"\n⚠️ 1차 시도 기준 미달 ({8-failed_count}/8 충족) - 2차 재시도 시작...")
 
-                # 실패 이유 수집
-                error_messages = []
-                if not first_para_ok:
-                    error_messages.append(f"첫문단 통키워드 {after_analysis['첫문단_통키워드']}회 (목표: 2회)")
-                if not sentence_start_ok:
-                    error_messages.append(f"문장 시작 {after_analysis['통키워드_문장시작']}개 (목표: 최소 2개 이상)")
-                if not 키워드사이_문장수_ok:
-                    error_messages.append(f"키워드 사이 문장 {after_analysis['첫문단_키워드사이_문장수']}개 (목표: 최소 2개)")
-                if not chars_ok:
-                    error_messages.append(f"글자수 {after_analysis['chars']}자 (목표: 300~900자)")
-                if not 나머지_통키워드_ok:
-                    error_messages.extend(나머지_통키워드_errors)
-                if not 조각키워드_ok:
-                    error_messages.extend(조각키워드_errors)
-                if not 서브키워드_ok:
-                    error_messages.append(f"서브키워드 {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상)")
-                if not 금칙어_ok:
-                    forbidden_list = ', '.join([f"'{item['word']}'" for item in forbidden_found[:3]])
-                    error_messages.append(f"금칙어 발견: {forbidden_list}")
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # 2차 재시도
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                print(f"\n{'=' * 100}")
+                print(f"🔄 2차 재시도 중...")
+                print(f"{'=' * 100}")
 
-                return {
-                    'success': False,
-                    'error': ', '.join(error_messages),
-                    'original': manuscript,
-                    'rewritten': rewritten,
-                    'before_analysis': analysis,
-                    'after_analysis': after_analysis
-                }
+                # 재시도 프롬프트 생성
+                retry_prompt = self.create_retry_prompt(
+                    manuscript, keyword, rewritten, after_analysis,
+                    target_whole_str, target_pieces_str
+                )
+
+                # 2차 시도
+                retry_response = self.model.generate_content(retry_prompt)
+                rewritten_retry = retry_response.text.strip()
+
+                # 2차 수정 후 재분석
+                after_analysis_retry = self.analyze_manuscript(
+                    rewritten_retry, keyword, target_whole_str,
+                    target_pieces_str, target_subkeywords
+                )
+
+                # 2차 검증
+                first_para_ok_retry = after_analysis_retry['첫문단_통키워드'] >= 2
+                sentence_start_ok_retry = after_analysis_retry['통키워드_문장시작'] >= 2
+                키워드사이_문장수_ok_retry = after_analysis_retry['첫문단_키워드사이_문장수'] >= 2
+                chars_ok_retry = after_analysis_retry['chars_in_range']
+
+                나머지_통키워드_ok_retry = True
+                나머지_통키워드_errors_retry = []
+                for kw, data in after_analysis_retry['나머지_통키워드'].items():
+                    if data['actual'] < data['target']:
+                        나머지_통키워드_ok_retry = False
+                        나머지_통키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+
+                조각키워드_ok_retry = True
+                조각키워드_errors_retry = []
+                for kw, data in after_analysis_retry['나머지_조각키워드'].items():
+                    if data['actual'] < data['target']:
+                        조각키워드_ok_retry = False
+                        조각키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+
+                서브키워드_ok_retry = after_analysis_retry['subkeywords']['actual'] >= after_analysis_retry['subkeywords']['target']
+
+                forbidden_found_retry = self.check_forbidden_words(rewritten_retry)
+                금칙어_ok_retry = len(forbidden_found_retry) == 0
+
+                all_criteria_met_retry = (
+                    first_para_ok_retry and sentence_start_ok_retry and 키워드사이_문장수_ok_retry and
+                    chars_ok_retry and 나머지_통키워드_ok_retry and 조각키워드_ok_retry and
+                    서브키워드_ok_retry and 금칙어_ok_retry
+                )
+
+                # 2차 검증 결과 출력
+                print(f"\n{'=' * 100}")
+                print(f"2차 시도 검증 결과:")
+                print(f"  1. 글자수: {after_analysis_retry['chars']}자 {'✅' if chars_ok_retry else '❌'}")
+                print(f"  2. 첫문단 통키워드: {after_analysis_retry['첫문단_통키워드']}회 {'✅' if first_para_ok_retry else '❌'}")
+                print(f"  3. 통키워드 문장 시작: {after_analysis_retry['통키워드_문장시작']}개 {'✅' if sentence_start_ok_retry else '❌'}")
+                print(f"  4. 첫문단 키워드 사이 문장: {after_analysis_retry['첫문단_키워드사이_문장수']}개 (최소 2개) {'✅' if 키워드사이_문장수_ok_retry else '❌'}")
+                print(f"  5. 나머지 통키워드: {'✅' if 나머지_통키워드_ok_retry else '❌'}")
+                if not 나머지_통키워드_ok_retry:
+                    for err in 나머지_통키워드_errors_retry:
+                        print(f"     - {err}")
+                print(f"  6. 조각키워드: {'✅' if 조각키워드_ok_retry else '❌'}")
+                if not 조각키워드_ok_retry:
+                    for err in 조각키워드_errors_retry:
+                        print(f"     - {err}")
+                print(f"  7. 서브키워드 목록: {after_analysis_retry['subkeywords']['actual']}개 (목표: {after_analysis_retry['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok_retry else '❌'}")
+                print(f"  8. 금칙어: {'✅' if 금칙어_ok_retry else '❌'}")
+                if not 금칙어_ok_retry:
+                    for item in forbidden_found_retry[:3]:
+                        print(f"     - '{item['word']}' 발견 (대체: {item['alternative']})")
+
+                if all_criteria_met_retry:
+                    print(f"\n✅ 2차 시도 성공! 모든 기준 충족 (8/8)")
+                    return {
+                        'success': True,
+                        'original': manuscript,
+                        'rewritten': rewritten_retry,
+                        'before_analysis': analysis,
+                        'after_analysis': after_analysis_retry
+                    }
+                else:
+                    failed_count_retry = sum([
+                        not chars_ok_retry,
+                        not first_para_ok_retry,
+                        not sentence_start_ok_retry,
+                        not 키워드사이_문장수_ok_retry,
+                        not 나머지_통키워드_ok_retry,
+                        not 조각키워드_ok_retry,
+                        not 서브키워드_ok_retry,
+                        not 금칙어_ok_retry
+                    ])
+                    print(f"\n⚠️ 2차 시도도 기준 미달 ({8-failed_count_retry}/8 충족) - 그대로 저장")
+
+                    # 2차 실패 이유 수집
+                    error_messages_retry = []
+                    if not first_para_ok_retry:
+                        error_messages_retry.append(f"첫문단 통키워드 {after_analysis_retry['첫문단_통키워드']}회 (목표: 2회 이상)")
+                    if not sentence_start_ok_retry:
+                        error_messages_retry.append(f"문장 시작 {after_analysis_retry['통키워드_문장시작']}개 (목표: 최소 2개 이상)")
+                    if not 키워드사이_문장수_ok_retry:
+                        error_messages_retry.append(f"키워드 사이 문장 {after_analysis_retry['첫문단_키워드사이_문장수']}개 (목표: 최소 2개)")
+                    if not chars_ok_retry:
+                        error_messages_retry.append(f"글자수 {after_analysis_retry['chars']}자 (목표: 300~900자)")
+                    if not 나머지_통키워드_ok_retry:
+                        error_messages_retry.extend(나머지_통키워드_errors_retry)
+                    if not 조각키워드_ok_retry:
+                        error_messages_retry.extend(조각키워드_errors_retry)
+                    if not 서브키워드_ok_retry:
+                        error_messages_retry.append(f"서브키워드 {after_analysis_retry['subkeywords']['actual']}개 (목표: {after_analysis_retry['subkeywords']['target']}개 이상)")
+                    if not 금칙어_ok_retry:
+                        forbidden_list_retry = ', '.join([f"'{item['word']}'" for item in forbidden_found_retry[:3]])
+                        error_messages_retry.append(f"금칙어 발견: {forbidden_list_retry}")
+
+                    return {
+                        'success': False,
+                        'error': ', '.join(error_messages_retry),
+                        'original': manuscript,
+                        'rewritten': rewritten_retry,
+                        'before_analysis': analysis,
+                        'after_analysis': after_analysis_retry
+                    }
 
         except Exception as e:
             print(f"❌ 수정 실패: {e}")
