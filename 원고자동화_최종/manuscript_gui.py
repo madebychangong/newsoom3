@@ -35,7 +35,6 @@ class ManuscriptGUI:
         self.gemini_api_key = tk.StringVar()
         self.input_file = tk.StringVar()
         self.max_rows = tk.IntVar(value=0)  # 0 = 전체
-        self.output_file = tk.StringVar()
 
         # Rewriter (나중에 초기화)
         self.rewriter = None
@@ -144,33 +143,14 @@ class ManuscriptGUI:
             foreground="gray"
         ).grid(row=0, column=1)
 
-        # ─────────────────────────────────────────────────
-        # 5. 출력 파일명 (선택)
-        # ─────────────────────────────────────────────────
-        row += 1
-        ttk.Label(main_frame, text="💾 출력 파일명:", font=("맑은 고딕", 10)).grid(
-            row=row, column=0, sticky=tk.W, pady=5
-        )
-
-        ttk.Entry(main_frame, textvariable=self.output_file, width=50).grid(
-            row=row, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5
-        )
-
-        ttk.Label(
-            main_frame,
-            text="비워두면 자동 생성 (원고수정결과_YYYYMMDD_HHMMSS.xlsx)",
-            font=("맑은 고딕", 8),
-            foreground="gray"
-        ).grid(row=row+1, column=1, columnspan=2, sticky=tk.W)
-
         # 구분선
-        row += 2
+        row += 1
         ttk.Separator(main_frame, orient='horizontal').grid(
             row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=15
         )
 
         # ─────────────────────────────────────────────────
-        # 6. 실행 버튼
+        # 5. 실행 버튼
         # ─────────────────────────────────────────────────
         row += 1
         button_frame = ttk.Frame(main_frame)
