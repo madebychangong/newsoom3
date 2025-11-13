@@ -68,7 +68,8 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
         if max_rows and idx >= max_rows:
             break
 
-        keyword = row['키워드']
+        # 키워드 읽기 (앞뒤 따옴표 제거)
+        keyword = str(row['키워드']).strip().strip('"').strip("'").strip()
         원고 = row['원고']
         target_whole = row['통키워드 반복수']
         target_pieces = row['조각키워드 반복수']

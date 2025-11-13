@@ -16,7 +16,8 @@ df = pd.read_excel('블로그 작업_엑셀템플릿.xlsx', sheet_name='검수�
 
 # 첫 번째 원고
 row = df.iloc[0]
-keyword = row['키워드']
+# 키워드 읽기 (앞뒤 따옴표 제거)
+keyword = str(row['키워드']).strip().strip('"').strip("'").strip()
 원고 = row['원고']
 target_whole = row['통키워드 반복수']
 target_pieces = row['조각키워드 반복수']
