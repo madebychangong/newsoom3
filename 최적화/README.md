@@ -53,20 +53,50 @@ pip install pandas openpyxl google-generativeai
 
 ## 사용법
 
-### 1. Gemini API 키 설정
+### 1. GUI로 사용하기 (가장 쉬운 방법) ⭐
+
+GUI를 사용하면 명령어 없이 쉽게 원고를 수정할 수 있습니다.
+
+**Windows:**
+```
+run_gui.bat 더블클릭
+```
+
+**Linux/Mac:**
+```bash
+./run_gui.sh
+```
+
+**또는 직접 실행:**
+```bash
+python manuscript_gui.py
+```
+
+**GUI 사용 방법:**
+1. **Gemini API 키** 입력 (필수)
+2. **엑셀 파일** 선택 (블로그 작업_엑셀템플릿.xlsx)
+3. **시트 선택** (검수전 또는 검수 후)
+4. **처리할 행수** 설정 (0 = 전체)
+5. **시작** 버튼 클릭
+6. 진행 상황을 실시간으로 확인
+7. 완료 후 결과 파일 자동 저장
+
+### 2. 명령줄로 사용하기
+
+#### 2-1. Gemini API 키 설정
 
 ```bash
 export GEMINI_API_KEY='your-api-key-here'
 ```
 
-### 2. 단일 원고 검수
+#### 2-2. 단일 원고 검수
 
 ```bash
 cd 최적화
 python auto_manuscript_rewriter.py
 ```
 
-### 3. 배치 처리
+#### 2-3. 배치 처리
 
 ```bash
 # 기본 사용 (검수전 시트의 모든 원고 처리)
@@ -82,7 +112,7 @@ python batch_rewrite_manuscripts.py --api-key 'your-api-key-here'
 python batch_rewrite_manuscripts.py --output '수정결과.xlsx'
 ```
 
-### 4. 원고 검수만 (수정 없이)
+#### 2-4. 원고 검수만 (수정 없이)
 
 ```bash
 python manuscript_checker.py
@@ -92,9 +122,13 @@ python manuscript_checker.py
 
 ```
 최적화/
+├── manuscript_gui.py                 # GUI 애플리케이션 ⭐
+├── run_gui.bat                       # Windows GUI 실행 스크립트
+├── run_gui.sh                        # Linux/Mac GUI 실행 스크립트
 ├── auto_manuscript_rewriter.py       # 자동 원고 수정 (Gemini API)
-├── batch_rewrite_manuscripts.py      # 배치 처리
+├── batch_rewrite_manuscripts.py      # 배치 처리 (CLI)
 ├── manuscript_checker.py             # 원고 검수 (분석만)
+├── demo_analysis.py                  # 데모 분석 (API 키 불필요)
 ├── forbidden_words_loader.py         # 금칙어 로더
 ├── 블로그 작업_엑셀템플릿.xlsx         # 원고 데이터
 ├── 금칙어 리스트.xlsx                 # 금칙어 및 대체어
