@@ -401,13 +401,15 @@ class ManuscriptGUI:
                     keyword=keyword,
                     target_whole_str=target_whole,
                     target_pieces_str=target_pieces,
-                    target_subkeywords=target_subkeywords
+                    target_subkeywords=target_subkeywords,
+                    max_retries=1
                 )
 
                 if result['success']:
                     results.append({
                         'row': idx + 2,
                         'keyword': keyword,
+                        'status': 'success',
                         'original': result['original'],
                         'rewritten': result['rewritten'],
                         'before_chars': result['before_analysis']['chars'],
@@ -419,7 +421,25 @@ class ManuscriptGUI:
                     })
                     self.log(f"   ✅ 성공: {result['before_analysis']['chars']}자 → {result['after_analysis']['chars']}자")
                 else:
-                    self.log(f"   ❌ 실패: {result.get('error', 'Unknown')}")
+                    # 실패해도 rewritten이 있으면 저장
+                    if 'rewritten' in result and result['rewritten']:
+                        results.append({
+                            'row': idx + 2,
+                            'keyword': keyword,
+                            'status': 'partial',
+                            'original': result['original'],
+                            'rewritten': result['rewritten'],
+                            'before_chars': result.get('before_analysis', {}).get('chars', 0) if 'before_analysis' in result else 0,
+                            'after_chars': result.get('after_analysis', {}).get('chars', 0) if 'after_analysis' in result else 0,
+                            'before_첫문단_통키워드': result.get('before_analysis', {}).get('첫문단_통키워드', 0) if 'before_analysis' in result else 0,
+                            'after_첫문단_통키워드': result.get('after_analysis', {}).get('첫문단_통키워드', 0) if 'after_analysis' in result else 0,
+                            'before_문장시작': result.get('before_analysis', {}).get('통키워드_문장시작', 0) if 'before_analysis' in result else 0,
+                            'after_문장시작': result.get('after_analysis', {}).get('통키워드_문장시작', 0) if 'after_analysis' in result else 0,
+                            'error': result.get('error', '기준 미달')
+                        })
+                        self.log(f"   ⚠️ 기준 미달 (저장함): {result.get('error', 'Unknown')}")
+                    else:
+                        self.log(f"   ❌ 실패: {result.get('error', 'Unknown')}")
 
                 self.log("")
 
@@ -428,42 +448,73 @@ class ManuscriptGUI:
                 return
 
             # 결과 저장
-            self.log("💾 결과를 엑셀로 저장 중...")
+            self.log("💾 결과를 txt 파일로 저장 중...")
 
-            output_file = self.output_file.get()
-            if not output_file:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_file = f'원고수정결과_{timestamp}.xlsx'
+            # 출력 폴더 생성
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_folder = f'원고수정결과_{timestamp}'
+            output_path = os.path.join(os.path.dirname(input_file), output_folder)
+            os.makedirs(output_path, exist_ok=True)
 
-            # DataFrame 생성
-            output_df = pd.DataFrame([
-                {
-                    '행번호': r['row'],
-                    '키워드': r['keyword'],
-                    '원본_글자수': r['before_chars'],
-                    '수정_글자수': r['after_chars'],
-                    '원본_첫문단_통키워드': r['before_첫문단_통키워드'],
-                    '수정_첫문단_통키워드': r['after_첫문단_통키워드'],
-                    '원본_문장시작': r['before_문장시작'],
-                    '수정_문장시작': r['after_문장시작'],
-                    '원본원고': r['original'],
-                    '수정원고': r['rewritten']
-                }
-                for r in results
-            ])
+            # 각 원고를 개별 txt 파일로 저장
+            for r in results:
+                keyword = r['keyword']
+                rewritten = r['rewritten']
 
-            # 엑셀로 저장
-            output_path = os.path.join(os.path.dirname(input_file), output_file)
-            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                output_df.to_excel(writer, sheet_name='수정결과', index=False)
-                df.to_excel(writer, sheet_name='원본데이터', index=False)
+                # 제목 제거 (# 로 시작하는 첫 줄 제거)
+                lines = rewritten.split('\n')
+                content_lines = []
+                for line in lines:
+                    if line.strip().startswith('#'):
+                        continue  # 제목 건너뛰기
+                    content_lines.append(line)
 
-            self.log(f"✅ 저장 완료: {output_file}")
+                # 맨 앞뒤 빈 줄 제거
+                content = '\n'.join(content_lines).strip()
+
+                # 파일명에 사용 불가능한 문자 제거
+                safe_keyword = keyword.replace('/', '_').replace('\\', '_').replace(':', '_')
+                filename = os.path.join(output_path, f"{safe_keyword}.txt")
+
+                # txt 파일로 저장 (제목 없이, 큰따옴표 없이)
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(content)
+
+            # 통계 파일 저장
+            stats_file = os.path.join(output_path, '통계.txt')
+            with open(stats_file, 'w', encoding='utf-8') as f:
+                f.write(f"원고 수정 결과 통계\n")
+                f.write(f"{'=' * 80}\n\n")
+                f.write(f"저장됨: {len(results)}개\n")
+                f.write(f"  - 기준 충족 ✅: {len([r for r in results if r['status'] == 'success'])}개\n")
+                f.write(f"  - 기준 미달 ⚠️: {len([r for r in results if r['status'] == 'partial'])}개\n\n")
+
+                f.write(f"{'=' * 80}\n")
+                f.write(f"개별 원고 통계\n")
+                f.write(f"{'=' * 80}\n\n")
+
+                for r in results:
+                    status_icon = '✅' if r['status'] == 'success' else '⚠️'
+                    f.write(f"[{r['keyword']}] {status_icon}\n")
+                    f.write(f"  글자수: {r['before_chars']}자 → {r['after_chars']}자\n")
+                    f.write(f"  첫문단 통키워드: {r['before_첫문단_통키워드']}회 → {r['after_첫문단_통키워드']}회 {'✅' if r['after_첫문단_통키워드'] == 2 else '❌'}\n")
+                    f.write(f"  문장시작: {r['before_문장시작']}개 → {r['after_문장시작']}개 {'✅' if r['after_문장시작'] == 2 else '❌'}\n")
+                    if r['status'] == 'partial':
+                        f.write(f"  ⚠️ {r.get('error', '기준 미달')}\n")
+                    f.write(f"\n")
+
+            self.log(f"✅ 저장 완료: {output_folder}/")
             self.log("")
             self.log("=" * 100)
             self.log("✅ 모든 작업 완료!")
             self.log("=" * 100)
-            self.log(f"📊 총 {len(results)}개 원고 수정 완료")
+
+            success_count = len([r for r in results if r['status'] == 'success'])
+            partial_count = len([r for r in results if r['status'] == 'partial'])
+
+            self.log(f"📊 총 {len(results)}개 원고 저장")
+            self.log(f"   - 기준 충족 ✅: {success_count}개")
+            self.log(f"   - 기준 미달 ⚠️: {partial_count}개")
 
             # 통계
             avg_before = sum(r['before_chars'] for r in results) / len(results)
@@ -483,8 +534,10 @@ class ManuscriptGUI:
             messagebox.showinfo(
                 "완료",
                 f"✅ 원고 수정 완료!\n\n"
-                f"처리: {len(results)}개\n"
-                f"저장: {output_file}"
+                f"저장: {len(results)}개\n"
+                f"  - 기준 충족 ✅: {success_count}개\n"
+                f"  - 기준 미달 ⚠️: {partial_count}개\n\n"
+                f"저장 위치: {output_folder}/"
             )
 
         except Exception as e:
