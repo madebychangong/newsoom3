@@ -357,7 +357,7 @@ class AutoManuscriptRewriter:
    - 키워드가 억지로 끼워 넣어진 느낌이 들면 안 됨
    - 자연스럽고 대화체처럼 편안한 문장
    - 예시 (부자연): "팔꿈치 쿠션 보호대 좋습니다. 팔꿈치 쿠션 보호대 추천합니다."
-   - 예시 (자연): "팔꿈치 쿠션 보호대 때문에 고민입니다. 운동할 때 팔꿈치가 자꾸 아파서요. 좋은 제품 있으면 추천 부탁드립니다."
+   - 예시 (자연): "팔꿈치가 계속 아파서 고민입니다. 팔꿈치 쿠션 보호대 알아보고 있는데요, 어떤 제품이 좋을까요? 사용해보신 분 계시면 팔꿈치 쿠션 보호대 추천 부탁드립니다."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 원본 원고
@@ -438,9 +438,13 @@ class AutoManuscriptRewriter:
             # 서브키워드 검증 (목표 이상이어야 함)
             서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
 
-            # ALL 7개 기준이 모두 충족되어야 성공
+            # 금칙어 검증
+            forbidden_found = self.check_forbidden_words(rewritten)
+            금칙어_ok = len(forbidden_found) == 0
+
+            # ALL 8개 기준이 모두 충족되어야 성공
             all_criteria_met = (first_para_ok and sentence_start_ok and 키워드사이_문장수_ok and
-                               chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok)
+                               chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok and 금칙어_ok)
 
             print(f"\n{'=' * 100}")
             print(f"수정 후 검증 결과:")
@@ -470,9 +474,15 @@ class AutoManuscriptRewriter:
             # 서브키워드 출력
             print(f"  7. 서브키워드 목록: {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok else '❌'}")
 
+            # 금칙어 출력
+            print(f"  8. 금칙어: {'✅' if 금칙어_ok else '❌'}")
+            if not 금칙어_ok:
+                for item in forbidden_found[:3]:  # 최대 3개만 표시
+                    print(f"     - '{item['word']}' 발견 (대체: {item['alternative']})")
+
             # ALL 기준 충족 여부 확인
             if all_criteria_met:
-                print(f"\n✅ 성공! 모든 기준 충족 (7/7)")
+                print(f"\n✅ 성공! 모든 기준 충족 (8/8)")
                 return {
                     'success': True,
                     'original': manuscript,
@@ -489,9 +499,10 @@ class AutoManuscriptRewriter:
                     not 키워드사이_문장수_ok,
                     not 나머지_통키워드_ok,
                     not 조각키워드_ok,
-                    not 서브키워드_ok
+                    not 서브키워드_ok,
+                    not 금칙어_ok
                 ])
-                print(f"\n⚠️ 기준 미달 ({7-failed_count}/7 충족) - 그대로 저장")
+                print(f"\n⚠️ 기준 미달 ({8-failed_count}/8 충족) - 그대로 저장")
 
                 # 실패 이유 수집
                 error_messages = []
@@ -509,6 +520,9 @@ class AutoManuscriptRewriter:
                     error_messages.extend(조각키워드_errors)
                 if not 서브키워드_ok:
                     error_messages.append(f"서브키워드 {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상)")
+                if not 금칙어_ok:
+                    forbidden_list = ', '.join([f"'{item['word']}'" for item in forbidden_found[:3]])
+                    error_messages.append(f"금칙어 발견: {forbidden_list}")
 
                 return {
                     'success': False,
