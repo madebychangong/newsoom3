@@ -16,8 +16,14 @@ import google.generativeai as genai
 class AutoManuscriptRewriter:
     """원고 자동 검수 및 수정 시스템"""
 
-    def __init__(self, forbidden_words_file='금칙어 리스트.xlsx', gemini_api_key=None):
-        """초기화"""
+    def __init__(self, forbidden_words_file='금칙어 리스트.xlsx', gemini_api_key=None, model_choice=1):
+        """초기화
+
+        Args:
+            forbidden_words_file: 금칙어 엑셀 파일 경로
+            gemini_api_key: Gemini API 키
+            model_choice: 1 = gemini-2.5-pro (고품질, 느림), 2 = gemini-2.0-flash-exp (빠름, 저렴)
+        """
         self.forbidden_words_file = forbidden_words_file
         self.load_forbidden_words()
 
@@ -27,7 +33,16 @@ class AutoManuscriptRewriter:
             raise ValueError("GEMINI_API_KEY 환경변수를 설정하거나 gemini_api_key 파라미터를 전달하세요.")
 
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-pro')
+
+        # 모델 선택
+        if model_choice == 2:
+            model_name = 'gemini-2.0-flash-exp'
+            print("🚀 모델: gemini-2.0-flash-exp (빠름, 저렴)")
+        else:
+            model_name = 'gemini-2.5-pro'
+            print("🎯 모델: gemini-2.5-pro (고품질, 느림)")
+
+        self.model = genai.GenerativeModel(model_name)
 
     def load_forbidden_words(self):
         """금칙어 리스트 로드"""

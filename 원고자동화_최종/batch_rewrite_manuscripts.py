@@ -17,7 +17,8 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
                   output_file=None,  # 사용하지 않음 (하위호환성 유지)
                   sheet_name='검수전',
                   max_rows=None,
-                  gemini_api_key=None):
+                  gemini_api_key=None,
+                  model_choice=1):
     """배치 원고 수정"""
 
     # API 키 확인
@@ -40,7 +41,7 @@ def batch_rewrite(input_file='블로그 작업_엑셀템플릿.xlsx',
 
     # Rewriter 초기화
     try:
-        rewriter = AutoManuscriptRewriter(gemini_api_key=api_key)
+        rewriter = AutoManuscriptRewriter(gemini_api_key=api_key, model_choice=model_choice)
     except Exception as e:
         print(f"❌ Rewriter 초기화 실패: {e}")
         return
@@ -294,6 +295,7 @@ def main():
     parser.add_argument('--sheet', '-s', default='검수전', help='시트명 (기본: 검수전)')
     parser.add_argument('--max-rows', '-n', type=int, help='최대 처리 행수')
     parser.add_argument('--api-key', '-k', help='Gemini API 키')
+    parser.add_argument('--model', '-m', type=int, default=1, choices=[1, 2], help='모델 선택 (1: pro, 2: flash)')
 
     args = parser.parse_args()
 
@@ -301,7 +303,8 @@ def main():
         input_file=args.input,
         sheet_name=args.sheet,
         max_rows=args.max_rows,
-        gemini_api_key=args.api_key
+        gemini_api_key=args.api_key,
+        model_choice=args.model
     )
 
 
