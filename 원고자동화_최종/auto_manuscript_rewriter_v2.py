@@ -304,9 +304,6 @@ class AutoManuscriptRewriterV2:
                           target_subkeywords: int, max_retries: int = 3) -> Dict:
         """원고 자동 수정 (여러 번 재시도)"""
 
-        # 금칙어 먼저 치환
-        manuscript = self.replace_forbidden_words(manuscript)
-
         for attempt in range(1, max_retries + 1):
             print(f"\n{'=' * 100}")
             print(f"{'🔄 재시도 ' + str(attempt) if attempt > 1 else '🤖 1차 시도'}")
@@ -354,10 +351,12 @@ class AutoManuscriptRewriterV2:
 
                 if all_ok:
                     print(f"\n✅ 성공! (시도 {attempt}회)")
+                    # 마지막에 금칙어 치환
+                    final_output = self.replace_forbidden_words(rewritten)
                     return {
                         'success': True,
                         'original': manuscript,
-                        'rewritten': rewritten,
+                        'rewritten': final_output,
                         'before_analysis': analysis,
                         'after_analysis': after_analysis,
                         'attempts': attempt
@@ -370,12 +369,14 @@ class AutoManuscriptRewriterV2:
                 print(f"❌ 오류: {e}")
                 continue
 
-        # 최종 실패
+        # 최종 실패 - 그래도 금칙어는 치환
+        final_rewritten = rewritten if 'rewritten' in locals() else manuscript
+        final_output = self.replace_forbidden_words(final_rewritten)
         return {
             'success': False,
             'error': f'{max_retries}회 시도 후에도 기준 미달',
             'original': manuscript,
-            'rewritten': rewritten if 'rewritten' in locals() else manuscript,
+            'rewritten': final_output,
             'before_analysis': analysis,
             'after_analysis': after_analysis if 'after_analysis' in locals() else analysis,
             'attempts': max_retries

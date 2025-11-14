@@ -439,9 +439,6 @@ class AutoManuscriptRewriter:
                           target_subkeywords: int) -> Dict:
         """원고 자동 수정 (한 번만 시도)"""
 
-        # 0. (추가) 금칙어를 기계적으로 먼저 치환
-        manuscript = self.replace_forbidden_words(manuscript)
-
         # 1. 분석
         analysis = self.analyze_manuscript(manuscript, keyword, target_whole_str,
                                           target_pieces_str, target_subkeywords)
@@ -493,13 +490,9 @@ class AutoManuscriptRewriter:
             # 서브키워드 검증 (목표 이상이어야 함)
             서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
 
-            # 금칙어 검증
-            forbidden_found = self.check_forbidden_words(rewritten)
-            금칙어_ok = len(forbidden_found) == 0
-
-            # ALL 8개 기준이 모두 충족되어야 성공
+            # ALL 7개 기준이 모두 충족되어야 성공 (금칙어는 마지막에 자동 치환)
             all_criteria_met = (first_para_ok and sentence_start_ok and 키워드사이_문장수_ok and
-                               chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok and 금칙어_ok)
+                               chars_ok and 나머지_통키워드_ok and 조각키워드_ok and 서브키워드_ok)
 
             print(f"\n{'=' * 100}")
             print(f"1차 시도 검증 결과:")
@@ -529,19 +522,15 @@ class AutoManuscriptRewriter:
             # 서브키워드 출력
             print(f"  7. 서브키워드 목록: {after_analysis['subkeywords']['actual']}개 (목표: {after_analysis['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok else '❌'}")
 
-            # 금칙어 출력
-            print(f"  8. 금칙어: {'✅' if 금칙어_ok else '❌'}")
-            if not 금칙어_ok:
-                for item in forbidden_found[:3]:  # 최대 3개만 표시
-                    print(f"     - '{item['word']}' 발견 (대체: {item['alternative']})")
-
             # ALL 기준 충족 여부 확인
             if all_criteria_met:
-                print(f"\n✅ 1차 시도 성공! 모든 기준 충족 (8/8)")
+                print(f"\n✅ 1차 시도 성공! 모든 기준 충족 (7/7)")
+                # 마지막에 금칙어 치환
+                final_output = self.replace_forbidden_words(rewritten)
                 return {
                     'success': True,
                     'original': manuscript,
-                    'rewritten': rewritten,
+                    'rewritten': final_output,
                     'before_analysis': analysis,
                     'after_analysis': after_analysis
                 }
@@ -554,10 +543,9 @@ class AutoManuscriptRewriter:
                     not 키워드사이_문장수_ok,
                     not 나머지_통키워드_ok,
                     not 조각키워드_ok,
-                    not 서브키워드_ok,
-                    not 금칙어_ok
+                    not 서브키워드_ok
                 ])
-                print(f"\n⚠️ 1차 시도 기준 미달 ({8-failed_count}/8 충족) - 2차 재시도 시작...")
+                print(f"\n⚠️ 1차 시도 기준 미달 ({7-failed_count}/7 충족) - 2차 재시도 시작...")
 
                 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                 # 2차 재시도
@@ -604,13 +592,10 @@ class AutoManuscriptRewriter:
 
                 서브키워드_ok_retry = after_analysis_retry['subkeywords']['actual'] >= after_analysis_retry['subkeywords']['target']
 
-                forbidden_found_retry = self.check_forbidden_words(rewritten_retry)
-                금칙어_ok_retry = len(forbidden_found_retry) == 0
-
                 all_criteria_met_retry = (
                     first_para_ok_retry and sentence_start_ok_retry and 키워드사이_문장수_ok_retry and
                     chars_ok_retry and 나머지_통키워드_ok_retry and 조각키워드_ok_retry and
-                    서브키워드_ok_retry and 금칙어_ok_retry
+                    서브키워드_ok_retry
                 )
 
                 # 2차 검증 결과 출력
@@ -629,17 +614,15 @@ class AutoManuscriptRewriter:
                     for err in 조각키워드_errors_retry:
                         print(f"     - {err}")
                 print(f"  7. 서브키워드 목록: {after_analysis_retry['subkeywords']['actual']}개 (목표: {after_analysis_retry['subkeywords']['target']}개 이상) {'✅' if 서브키워드_ok_retry else '❌'}")
-                print(f"  8. 금칙어: {'✅' if 금칙어_ok_retry else '❌'}")
-                if not 금칙어_ok_retry:
-                    for item in forbidden_found_retry[:3]:
-                        print(f"     - '{item['word']}' 발견 (대체: {item['alternative']})")
 
                 if all_criteria_met_retry:
-                    print(f"\n✅ 2차 시도 성공! 모든 기준 충족 (8/8)")
+                    print(f"\n✅ 2차 시도 성공! 모든 기준 충족 (7/7)")
+                    # 마지막에 금칙어 치환
+                    final_output_retry = self.replace_forbidden_words(rewritten_retry)
                     return {
                         'success': True,
                         'original': manuscript,
-                        'rewritten': rewritten_retry,
+                        'rewritten': final_output_retry,
                         'before_analysis': analysis,
                         'after_analysis': after_analysis_retry
                     }
@@ -651,10 +634,9 @@ class AutoManuscriptRewriter:
                         not 키워드사이_문장수_ok_retry,
                         not 나머지_통키워드_ok_retry,
                         not 조각키워드_ok_retry,
-                        not 서브키워드_ok_retry,
-                        not 금칙어_ok_retry
+                        not 서브키워드_ok_retry
                     ])
-                    print(f"\n⚠️ 2차 시도도 기준 미달 ({8-failed_count_retry}/8 충족) - 그대로 저장")
+                    print(f"\n⚠️ 2차 시도도 기준 미달 ({7-failed_count_retry}/7 충족) - 그대로 저장")
 
                     # 2차 실패 이유 수집
                     error_messages_retry = []
@@ -672,15 +654,14 @@ class AutoManuscriptRewriter:
                         error_messages_retry.extend(조각키워드_errors_retry)
                     if not 서브키워드_ok_retry:
                         error_messages_retry.append(f"서브키워드 {after_analysis_retry['subkeywords']['actual']}개 (목표: {after_analysis_retry['subkeywords']['target']}개 이상)")
-                    if not 금칙어_ok_retry:
-                        forbidden_list_retry = ', '.join([f"'{item['word']}'" for item in forbidden_found_retry[:3]])
-                        error_messages_retry.append(f"금칙어 발견: {forbidden_list_retry}")
 
+                    # 실패해도 금칙어는 치환
+                    final_output_fail = self.replace_forbidden_words(rewritten_retry)
                     return {
                         'success': False,
                         'error': ', '.join(error_messages_retry),
                         'original': manuscript,
-                        'rewritten': rewritten_retry,
+                        'rewritten': final_output_fail,
                         'before_analysis': analysis,
                         'after_analysis': after_analysis_retry
                     }
