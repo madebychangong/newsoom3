@@ -297,7 +297,12 @@ class AutoManuscriptRewriterV2:
         # 7. 서브키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         sub_diff = analysis['subkeywords']['target'] - analysis['subkeywords']['actual']
         if sub_diff > 0:
-            tasks.append(f"2회 이상 반복되는 한글 단어나 특수문자 반복(^^, ;;, **, !!)을 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개)")
+            tasks.append(f"""서브키워드를 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개)
+   방법 1: 2회 이상 반복되는 한글 단어 추가 (예: "정말", "많이" 등)
+   방법 2: 특수문자 2회 반복 추가 - 문장 끝에 자연스럽게 삽입
+      예: "도움이 됐으면 좋겠어요 ^^" (띄어쓰기 필수!)
+      예: "궁금한 점이 많네요 ;;" (띄어쓰기 필수!)
+   ⚠️ 특수문자는 앞뒤로 띄어쓰기 필수!""")
         elif analysis['subkeywords']['actual'] > analysis['subkeywords']['target'] + 1:
             sub_excess = analysis['subkeywords']['actual'] - analysis['subkeywords']['target'] - 1
             tasks.append(f"반복 단어를 {sub_excess}개 제거하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개, 초과 금지)")

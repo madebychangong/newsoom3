@@ -533,8 +533,8 @@ class ManuscriptGUI:
                         for kw, data in after_나머지_통키워드.items():
                             target = data.get('target', 0)
                             actual = data.get('actual', 0)
-                            icon = '✅' if actual == target else '❌'
-                            f.write(f"  나머지 [{kw}]: {actual}회 (목표: {target}회) {icon}\n")
+                            icon = '✅' if target <= actual <= target + 1 else '❌'
+                            f.write(f"  나머지 [{kw}]: {actual}회 (목표: {target}~{target+1}회) {icon}\n")
 
                     # 조각키워드
                     after_조각키워드 = r.get('after_조각키워드', {})
@@ -542,16 +542,16 @@ class ManuscriptGUI:
                         for kw, data in after_조각키워드.items():
                             target = data.get('target', 0)
                             actual = data.get('actual', 0)
-                            icon = '✅' if actual == target else '❌'
-                            f.write(f"  조각 [{kw}]: {actual}회 (목표: {target}회) {icon}\n")
+                            icon = '✅' if target <= actual <= target + 1 else '❌'
+                            f.write(f"  조각 [{kw}]: {actual}회 (목표: {target}~{target+1}회) {icon}\n")
 
                     # 서브키워드
                     after_서브키워드 = r.get('after_서브키워드', {})
                     if after_서브키워드:
                         target = after_서브키워드.get('target', 0)
                         actual = after_서브키워드.get('actual', 0)
-                        icon = '✅' if actual >= target else '❌'
-                        f.write(f"  서브키워드 목록 수: {actual}개 (목표: {target}개 이상) {icon}\n")
+                        icon = '✅' if target <= actual <= target + 1 else '❌'
+                        f.write(f"  서브키워드 목록 수: {actual}개 (목표: {target}~{target+1}개) {icon}\n")
 
                     if r['status'] == 'partial':
                         f.write(f"  ⚠️ {r.get('error', '기준 미달')}\n")
