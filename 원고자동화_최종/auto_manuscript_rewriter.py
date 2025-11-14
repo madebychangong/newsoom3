@@ -146,12 +146,13 @@ class AutoManuscriptRewriter:
         return 0
 
     def count_subkeywords(self, text: str, exclude_keywords: List[str] = None) -> int:
-        """서브키워드 목록 수 (2회 이상 등장하는 단어)"""
+        """서브키워드 목록 수 (한글 단어 + 특수문자 반복)"""
         if exclude_keywords is None:
             exclude_keywords = []
 
         words = re.findall(r'[가-힣]+', text)
-        punctuations = re.findall(r'([^\w\s가-힣])\1+', text)
+        # 앞뒤 띄어쓰기가 있는 특수문자 2개 반복 (^^, ;;, **, !! 등)
+        punctuations = re.findall(r'(?<=\s)([^\w\s가-힣])\1(?=\s)', text)
 
         word_counter = Counter(words)
         punct_counter = Counter(punctuations)
@@ -161,6 +162,7 @@ class AutoManuscriptRewriter:
             if count >= 2 and len(word) >= 2 and word not in exclude_keywords:
                 subkeywords.add(word)
 
+        # 특수문자 반복: 2회 이상 등장하면 서브키워드로 카운트
         for punct, count in punct_counter.items():
             if count >= 2:
                 subkeywords.add(punct * 2)
@@ -230,22 +232,31 @@ class AutoManuscriptRewriter:
             diff = 2 - 키워드사이_count
             actions.append(f"첫 문단에서 첫 번째와 두 번째 [{keyword}] 사이에 문장 {diff}개 더 추가 (현재 {키워드사이_count}개 → 목표 최소 2개)")
 
-        # 5. 나머지 통키워드 (최소 이상)
+        # 5. 나머지 통키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         for kw, data in analysis['나머지_통키워드'].items():
             if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                actions.append(f"첫 문단 이후에 [{kw}] 최소 {diff}회 더 추가 (현재 {data['actual']}회 → 목표 최소 {data['target']}회 이상, 많아도 OK)")
+                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 더 추가 (현재 {data['actual']}회 → 목표 {data['target']}~{data['target']+1}회)")
+            elif data['actual'] > data['target'] + 1:
+                diff = data['actual'] - data['target'] - 1
+                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 제거 (현재 {data['actual']}회 → 목표 {data['target']}~{data['target']+1}회, 초과 금지)")
 
-        # 6. 조각키워드 (최소 이상)
+        # 6. 조각키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         for kw, data in analysis['나머지_조각키워드'].items():
             if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                actions.append(f"첫 문단 이후에 [{kw}] 최소 {diff}회 더 추가 (현재 {data['actual']}회 → 목표 최소 {data['target']}회 이상, 많아도 OK)")
+                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 더 추가 (현재 {data['actual']}회 → 목표 {data['target']}~{data['target']+1}회)")
+            elif data['actual'] > data['target'] + 1:
+                diff = data['actual'] - data['target'] - 1
+                actions.append(f"첫 문단 이후에 [{kw}] {diff}회 제거 (현재 {data['actual']}회 → 목표 {data['target']}~{data['target']+1}회, 초과 금지)")
 
-        # 7. 서브키워드 (최소 이상)
+        # 7. 서브키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         sub_diff = analysis['subkeywords']['target'] - analysis['subkeywords']['actual']
         if sub_diff > 0:
-            actions.append(f"2회 이상 반복되는 단어를 최소 {sub_diff}개 더 추가 (현재 {analysis['subkeywords']['actual']}개 → 목표 최소 {analysis['subkeywords']['target']}개 이상)")
+            actions.append(f"2회 이상 반복되는 한글 단어나 특수문자 반복(^^, ;;, **, !!)을 {sub_diff}개 더 추가 (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개)")
+        elif analysis['subkeywords']['actual'] > analysis['subkeywords']['target'] + 1:
+            sub_excess = analysis['subkeywords']['actual'] - analysis['subkeywords']['target'] - 1
+            actions.append(f"반복 단어를 {sub_excess}개 제거 (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개, 초과 금지)")
 
         return actions
 
@@ -471,24 +482,24 @@ class AutoManuscriptRewriter:
             키워드사이_문장수_ok = after_analysis['첫문단_키워드사이_문장수'] >= 2  # 최소 2개 (1개는 ❌)
             chars_ok = after_analysis['chars_in_range']
 
-            # 나머지 통키워드 검증 (최소 이상이어야 함 - 넘어가는 건 OK)
+            # 나머지 통키워드 검증 (목표~목표+1 허용, 초과 금지)
             나머지_통키워드_ok = True
             나머지_통키워드_errors = []
             for kw, data in after_analysis['나머지_통키워드'].items():
-                if data['actual'] < data['target']:
+                if not (data['target'] <= data['actual'] <= data['target'] + 1):
                     나머지_통키워드_ok = False
-                    나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                    나머지_통키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}~{data['target']+1}회)")
 
-            # 조각키워드 검증 (목표 이상이어야 함 - 넘어가는 건 OK)
+            # 조각키워드 검증 (목표~목표+1 허용, 초과 금지)
             조각키워드_ok = True
             조각키워드_errors = []
             for kw, data in after_analysis['나머지_조각키워드'].items():
-                if data['actual'] < data['target']:
+                if not (data['target'] <= data['actual'] <= data['target'] + 1):
                     조각키워드_ok = False
-                    조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                    조각키워드_errors.append(f"{kw}: {data['actual']}회 (목표: {data['target']}~{data['target']+1}회)")
 
-            # 서브키워드 검증 (목표 이상이어야 함)
-            서브키워드_ok = after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
+            # 서브키워드 검증 (목표~목표+1 허용, 초과 금지)
+            서브키워드_ok = after_analysis['subkeywords']['target'] <= after_analysis['subkeywords']['actual'] <= after_analysis['subkeywords']['target'] + 1
 
             # ALL 7개 기준이 모두 충족되어야 성공 (금칙어는 마지막에 자동 치환)
             all_criteria_met = (first_para_ok and sentence_start_ok and 키워드사이_문장수_ok and
@@ -579,18 +590,18 @@ class AutoManuscriptRewriter:
                 나머지_통키워드_ok_retry = True
                 나머지_통키워드_errors_retry = []
                 for kw, data in after_analysis_retry['나머지_통키워드'].items():
-                    if data['actual'] < data['target']:
+                    if not (data['target'] <= data['actual'] <= data['target'] + 1):
                         나머지_통키워드_ok_retry = False
-                        나머지_통키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                        나머지_통키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}~{data['target']+1}회)")
 
                 조각키워드_ok_retry = True
                 조각키워드_errors_retry = []
                 for kw, data in after_analysis_retry['나머지_조각키워드'].items():
-                    if data['actual'] < data['target']:
+                    if not (data['target'] <= data['actual'] <= data['target'] + 1):
                         조각키워드_ok_retry = False
-                        조각키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}회 이상)")
+                        조각키워드_errors_retry.append(f"{kw}: {data['actual']}회 (목표: {data['target']}~{data['target']+1}회)")
 
-                서브키워드_ok_retry = after_analysis_retry['subkeywords']['actual'] >= after_analysis_retry['subkeywords']['target']
+                서브키워드_ok_retry = after_analysis_retry['subkeywords']['target'] <= after_analysis_retry['subkeywords']['actual'] <= after_analysis_retry['subkeywords']['target'] + 1
 
                 all_criteria_met_retry = (
                     first_para_ok_retry and sentence_start_ok_retry and 키워드사이_문장수_ok_retry and

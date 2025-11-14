@@ -130,12 +130,13 @@ class AutoManuscriptRewriterV2:
         return 0
 
     def count_subkeywords(self, text: str, exclude_keywords: List[str] = None) -> int:
-        """서브키워드 목록 수"""
+        """서브키워드 목록 수 (한글 단어 + 특수문자 반복)"""
         if exclude_keywords is None:
             exclude_keywords = []
 
         words = re.findall(r'[가-힣]+', text)
-        punctuations = re.findall(r'([^\w\s가-힣])\1+', text)
+        # 앞뒤 띄어쓰기가 있는 특수문자 2개 반복 (^^, ;;, **, !! 등)
+        punctuations = re.findall(r'(?<=\s)([^\w\s가-힣])\1(?=\s)', text)
 
         word_counter = Counter(words)
         punct_counter = Counter(punctuations)
@@ -145,6 +146,7 @@ class AutoManuscriptRewriterV2:
             if count >= 2 and len(word) >= 2 and word not in exclude_keywords:
                 subkeywords.add(word)
 
+        # 특수문자 반복: 2회 이상 등장하면 서브키워드로 카운트
         for punct, count in punct_counter.items():
             if count >= 2:
                 subkeywords.add(punct * 2)
@@ -252,22 +254,31 @@ class AutoManuscriptRewriterV2:
         elif chars > 900:
             tasks.append(f"글자수를 {chars - 900}자 줄이세요. (현재 {chars}자 → 목표 300~900자)")
 
-        # 5. 나머지 통키워드 (목표 이상이면 OK, 부족하면만 추가)
+        # 5. 나머지 통키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         for kw, data in analysis['나머지_통키워드'].items():
             if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                tasks.append(f"첫 문단 이후에 [{kw}] 를 최소 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 최소 {data['target']}개 이상)")
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 {data['target']}~{data['target']+1}개)")
+            elif data['actual'] > data['target'] + 1:
+                diff = data['actual'] - data['target'] - 1
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 제거하세요. (현재 {data['actual']}개 → 목표 {data['target']}~{data['target']+1}개, 초과 금지)")
 
-        # 6. 조각키워드 (목표 이상이면 OK, 부족하면만 추가)
+        # 6. 조각키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         for kw, data in analysis['나머지_조각키워드'].items():
             if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                tasks.append(f"첫 문단 이후에 [{kw}] 를 최소 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 최소 {data['target']}개 이상)")
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 {data['target']}~{data['target']+1}개)")
+            elif data['actual'] > data['target'] + 1:
+                diff = data['actual'] - data['target'] - 1
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 제거하세요. (현재 {data['actual']}개 → 목표 {data['target']}~{data['target']+1}개, 초과 금지)")
 
-        # 7. 서브키워드 (목표 이상이면 OK, 부족하면만 추가)
+        # 7. 서브키워드 (목표~목표+1개 허용, 그 이상 초과 금지)
         sub_diff = analysis['subkeywords']['target'] - analysis['subkeywords']['actual']
         if sub_diff > 0:
-            tasks.append(f"2회 이상 반복되는 한글 단어를 최소 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 최소 {analysis['subkeywords']['target']}개 이상)")
+            tasks.append(f"2회 이상 반복되는 한글 단어나 특수문자 반복(^^, ;;, **, !!)을 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개)")
+        elif analysis['subkeywords']['actual'] > analysis['subkeywords']['target'] + 1:
+            sub_excess = analysis['subkeywords']['actual'] - analysis['subkeywords']['target'] - 1
+            tasks.append(f"반복 단어를 {sub_excess}개 제거하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개, 초과 금지)")
 
         # 프롬프트 생성
         prompt = f"""블로그 원고를 수정하세요.
@@ -332,15 +343,15 @@ class AutoManuscriptRewriterV2:
                 after_analysis = self.analyze_manuscript(rewritten, keyword, target_whole_str,
                                                         target_pieces_str, target_subkeywords)
 
-                # 검증 (목표 이상이면 OK!)
+                # 검증 (목표~목표+1 범위 허용, 초과 금지!)
                 all_ok = (
                     after_analysis['첫문단_통키워드'] == 2 and
                     after_analysis['통키워드_문장시작'] == 2 and
                     after_analysis['첫문단_키워드사이_문장수'] >= 2 and
                     after_analysis['chars_in_range'] and
-                    all(d['actual'] >= d['target'] for d in after_analysis['나머지_통키워드'].values()) and
-                    all(d['actual'] >= d['target'] for d in after_analysis['나머지_조각키워드'].values()) and
-                    after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
+                    all(d['target'] <= d['actual'] <= d['target'] + 1 for d in after_analysis['나머지_통키워드'].values()) and
+                    all(d['target'] <= d['actual'] <= d['target'] + 1 for d in after_analysis['나머지_조각키워드'].values()) and
+                    after_analysis['subkeywords']['target'] <= after_analysis['subkeywords']['actual'] <= after_analysis['subkeywords']['target'] + 1
                 )
 
                 print(f"\n검증 결과:")
