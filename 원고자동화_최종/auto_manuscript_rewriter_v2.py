@@ -252,28 +252,22 @@ class AutoManuscriptRewriterV2:
         elif chars > 900:
             tasks.append(f"글자수를 {chars - 900}자 줄이세요. (현재 {chars}자 → 목표 300~900자)")
 
-        # 5. 나머지 통키워드
+        # 5. 나머지 통키워드 (목표 이상이면 OK, 부족하면만 추가)
         for kw, data in analysis['나머지_통키워드'].items():
-            if data['actual'] != data['target']:
+            if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                if diff > 0:
-                    tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 정확히 {data['target']}개)")
-                else:
-                    tasks.append(f"첫 문단 이후에 [{kw}] 를 {abs(diff)}개 제거하세요. (현재 {data['actual']}개 → 목표 정확히 {data['target']}개)")
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 최소 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 최소 {data['target']}개 이상)")
 
-        # 6. 조각키워드
+        # 6. 조각키워드 (목표 이상이면 OK, 부족하면만 추가)
         for kw, data in analysis['나머지_조각키워드'].items():
-            if data['actual'] != data['target']:
+            if data['actual'] < data['target']:
                 diff = data['target'] - data['actual']
-                if diff > 0:
-                    tasks.append(f"첫 문단 이후에 [{kw}] 를 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 정확히 {data['target']}개)")
-                else:
-                    tasks.append(f"첫 문단 이후에 [{kw}] 를 {abs(diff)}개 제거하세요. (현재 {data['actual']}개 → 목표 정확히 {data['target']}개)")
+                tasks.append(f"첫 문단 이후에 [{kw}] 를 최소 {diff}개 추가하세요. (현재 {data['actual']}개 → 목표 최소 {data['target']}개 이상)")
 
-        # 7. 서브키워드
+        # 7. 서브키워드 (목표 이상이면 OK, 부족하면만 추가)
         sub_diff = analysis['subkeywords']['target'] - analysis['subkeywords']['actual']
         if sub_diff > 0:
-            tasks.append(f"2회 이상 반복되는 한글 단어를 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}개)")
+            tasks.append(f"2회 이상 반복되는 한글 단어를 최소 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 최소 {analysis['subkeywords']['target']}개 이상)")
 
         # 프롬프트 생성
         prompt = f"""블로그 원고를 수정하세요.
@@ -341,14 +335,14 @@ class AutoManuscriptRewriterV2:
                 after_analysis = self.analyze_manuscript(rewritten, keyword, target_whole_str,
                                                         target_pieces_str, target_subkeywords)
 
-                # 검증
+                # 검증 (목표 이상이면 OK!)
                 all_ok = (
                     after_analysis['첫문단_통키워드'] == 2 and
                     after_analysis['통키워드_문장시작'] == 2 and
                     after_analysis['첫문단_키워드사이_문장수'] >= 2 and
                     after_analysis['chars_in_range'] and
-                    all(d['actual'] == d['target'] for d in after_analysis['나머지_통키워드'].values()) and
-                    all(d['actual'] == d['target'] for d in after_analysis['나머지_조각키워드'].values()) and
+                    all(d['actual'] >= d['target'] for d in after_analysis['나머지_통키워드'].values()) and
+                    all(d['actual'] >= d['target'] for d in after_analysis['나머지_조각키워드'].values()) and
                     after_analysis['subkeywords']['actual'] >= after_analysis['subkeywords']['target']
                 )
 
