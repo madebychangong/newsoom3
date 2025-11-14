@@ -195,11 +195,33 @@ class AutoManuscriptRewriter:
                 })
         return found
 
-    def replace_forbidden_words(self, text: str) -> str:
-        """텍스트에서 모든 금칙어를 첫 번째 대체어로 기계적으로 치환합니다."""
+    def replace_forbidden_words(self, text: str, keyword: str = None, target_pieces_str: str = None) -> str:
+        """금칙어 치환 (단, 통키워드/조각키워드 안의 금칙어는 보호)"""
+
+        # 보호할 키워드 리스트
+        protected_keywords = []
+        if keyword:
+            protected_keywords.append(keyword)
+        if target_pieces_str:
+            target_pieces = self.parse_target_value(target_pieces_str)
+            protected_keywords.extend(target_pieces.keys())
+
+        # 일반 금칙어 치환 (보호 대상 제외)
         for forbidden, alternatives in self.forbidden_words.items():
-            if alternatives:
+            if not alternatives:
+                continue
+
+            # 이 금칙어가 보호 대상 키워드에 포함되어 있는지 확인
+            is_protected = any(forbidden in pk for pk in protected_keywords)
+
+            if not is_protected:
+                # 보호 대상이 아니면 치환
                 text = text.replace(forbidden, alternatives[0])
+
+        # 특수 금칙어 변환 (보호 대상이어도 항상 변환)
+        text = text.replace("네요", "내요")
+        text = text.replace("하더라", "하더 라")
+
         return text
 
     def create_action_plan(self, analysis: Dict, keyword: str,
@@ -536,8 +558,8 @@ class AutoManuscriptRewriter:
             # ALL 기준 충족 여부 확인
             if all_criteria_met:
                 print(f"\n✅ 1차 시도 성공! 모든 기준 충족 (7/7)")
-                # 마지막에 금칙어 치환
-                final_output = self.replace_forbidden_words(rewritten)
+                # 마지막에 금칙어 치환 (통키워드/조각키워드는 보호)
+                final_output = self.replace_forbidden_words(rewritten, keyword, target_pieces_str)
                 return {
                     'success': True,
                     'original': manuscript,
@@ -628,8 +650,8 @@ class AutoManuscriptRewriter:
 
                 if all_criteria_met_retry:
                     print(f"\n✅ 2차 시도 성공! 모든 기준 충족 (7/7)")
-                    # 마지막에 금칙어 치환
-                    final_output_retry = self.replace_forbidden_words(rewritten_retry)
+                    # 마지막에 금칙어 치환 (통키워드/조각키워드는 보호)
+                    final_output_retry = self.replace_forbidden_words(rewritten_retry, keyword, target_pieces_str)
                     return {
                         'success': True,
                         'original': manuscript,
@@ -666,8 +688,8 @@ class AutoManuscriptRewriter:
                     if not 서브키워드_ok_retry:
                         error_messages_retry.append(f"서브키워드 {after_analysis_retry['subkeywords']['actual']}개 (목표: {after_analysis_retry['subkeywords']['target']}개 이상)")
 
-                    # 실패해도 금칙어는 치환
-                    final_output_fail = self.replace_forbidden_words(rewritten_retry)
+                    # 실패해도 금칙어는 치환 (통키워드/조각키워드는 보호)
+                    final_output_fail = self.replace_forbidden_words(rewritten_retry, keyword, target_pieces_str)
                     return {
                         'success': False,
                         'error': ', '.join(error_messages_retry),

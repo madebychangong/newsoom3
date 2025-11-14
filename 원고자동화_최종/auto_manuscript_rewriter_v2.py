@@ -168,11 +168,33 @@ class AutoManuscriptRewriterV2:
                 result[kw] = count
         return result
 
-    def replace_forbidden_words(self, text: str) -> str:
-        """금칙어 치환"""
+    def replace_forbidden_words(self, text: str, keyword: str = None, target_pieces_str: str = None) -> str:
+        """금칙어 치환 (단, 통키워드/조각키워드 안의 금칙어는 보호)"""
+
+        # 보호할 키워드 리스트
+        protected_keywords = []
+        if keyword:
+            protected_keywords.append(keyword)
+        if target_pieces_str:
+            target_pieces = self.parse_target_value(target_pieces_str)
+            protected_keywords.extend(target_pieces.keys())
+
+        # 일반 금칙어 치환 (보호 대상 제외)
         for forbidden, alternatives in self.forbidden_words.items():
-            if alternatives:
+            if not alternatives:
+                continue
+
+            # 이 금칙어가 보호 대상 키워드에 포함되어 있는지 확인
+            is_protected = any(forbidden in pk for pk in protected_keywords)
+
+            if not is_protected:
+                # 보호 대상이 아니면 치환
                 text = text.replace(forbidden, alternatives[0])
+
+        # 특수 금칙어 변환 (보호 대상이어도 항상 변환)
+        text = text.replace("네요", "내요")
+        text = text.replace("하더라", "하더 라")
+
         return text
 
     def analyze_manuscript(self, manuscript: str, keyword: str,
@@ -362,8 +384,8 @@ class AutoManuscriptRewriterV2:
 
                 if all_ok:
                     print(f"\n✅ 성공! (시도 {attempt}회)")
-                    # 마지막에 금칙어 치환
-                    final_output = self.replace_forbidden_words(rewritten)
+                    # 마지막에 금칙어 치환 (통키워드/조각키워드는 보호)
+                    final_output = self.replace_forbidden_words(rewritten, keyword, target_pieces_str)
                     return {
                         'success': True,
                         'original': manuscript,
@@ -380,9 +402,9 @@ class AutoManuscriptRewriterV2:
                 print(f"❌ 오류: {e}")
                 continue
 
-        # 최종 실패 - 그래도 금칙어는 치환
+        # 최종 실패 - 그래도 금칙어는 치환 (통키워드/조각키워드는 보호)
         final_rewritten = rewritten if 'rewritten' in locals() else manuscript
-        final_output = self.replace_forbidden_words(final_rewritten)
+        final_output = self.replace_forbidden_words(final_rewritten, keyword, target_pieces_str)
         return {
             'success': False,
             'error': f'{max_retries}회 시도 후에도 기준 미달',
