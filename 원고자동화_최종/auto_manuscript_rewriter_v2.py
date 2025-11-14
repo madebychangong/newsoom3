@@ -135,21 +135,24 @@ class AutoManuscriptRewriterV2:
             exclude_keywords = []
 
         words = re.findall(r'[가-힣]+', text)
-        # 앞뒤 띄어쓰기가 있는 특수문자 2개 반복 (^^, ;;, **, !! 등)
-        punctuations = re.findall(r'(?<=\s)([^\w\s가-힣])\1(?=\s)', text)
+        # 앞뒤 띄어쓰기가 있는 특수문자 2개 이상 반복 (^^, ;;, .., ..., 등)
+        # 패턴 전체를 잡음: .. 와 ... 는 별개의 서브키워드
+        special_patterns = re.findall(r'(?<=\s)(([^\w\s가-힣])\2+)(?=\s)', text)
+        punct_patterns = [match[0] for match in special_patterns]
 
         word_counter = Counter(words)
-        punct_counter = Counter(punctuations)
+        punct_counter = Counter(punct_patterns)
 
         subkeywords = set()
         for word, count in word_counter.items():
             if count >= 2 and len(word) >= 2 and word not in exclude_keywords:
                 subkeywords.add(word)
 
-        # 특수문자 반복: 2회 이상 등장하면 서브키워드로 카운트
-        for punct, count in punct_counter.items():
+        # 특수문자 패턴: 2회 이상 등장하면 서브키워드로 카운트
+        # 예: '..' 2회, '...' 2회 → 서브키워드 2개 (별개!)
+        for pattern, count in punct_counter.items():
             if count >= 2:
-                subkeywords.add(punct * 2)
+                subkeywords.add(pattern)
 
         return len(subkeywords)
 
@@ -299,10 +302,12 @@ class AutoManuscriptRewriterV2:
         if sub_diff > 0:
             tasks.append(f"""서브키워드를 {sub_diff}개 더 추가하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개)
    방법 1: 2회 이상 반복되는 한글 단어 추가 (예: "정말", "많이" 등)
-   방법 2: 특수문자 2회 반복 추가 - 문장 끝에 자연스럽게 삽입
+   방법 2: 특수문자 반복 추가 - 문장 끝에 자연스럽게 삽입
       예: "도움이 됐으면 좋겠어요 ^^" (띄어쓰기 필수!)
-      예: "궁금한 점이 많네요 ;;" (띄어쓰기 필수!)
-   ⚠️ 특수문자는 앞뒤로 띄어쓰기 필수!""")
+      예: "궁금한 점이 많네요 .." (띄어쓰기 필수!)
+      예: "정말 좋아요 ..." (띄어쓰기 필수!)
+   ⚠️ 중요: ".." 와 "..." 는 별개의 서브키워드! 각각 2회씩 사용해야 함
+   ⚠️ 특수문자는 반드시 앞뒤로 띄어쓰기!""")
         elif analysis['subkeywords']['actual'] > analysis['subkeywords']['target'] + 1:
             sub_excess = analysis['subkeywords']['actual'] - analysis['subkeywords']['target'] - 1
             tasks.append(f"반복 단어를 {sub_excess}개 제거하세요. (현재 {analysis['subkeywords']['actual']}개 → 목표 {analysis['subkeywords']['target']}~{analysis['subkeywords']['target']+1}개, 초과 금지)")
