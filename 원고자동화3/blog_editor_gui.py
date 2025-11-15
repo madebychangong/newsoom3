@@ -374,18 +374,37 @@ class BlogEditorGUI:
             return f"분석 실패: {str(e)}"
     
     def add_line_breaks(self, text):
-        """문장마다 줄바꿈 추가 (AI가 넣은 문단 구분은 보존)"""
+        """문장마다 줄바꿈 추가 + 강제 문단 구분 (첫 5문장, 이후 3-4문장마다)"""
         if not text:
             return text
 
-        # AI가 이미 문단을 나눴으면 보존
-        # 문장 종결 부호 뒤에 줄바꿈만 추가
-        text = re.sub(r'([.!?])\s+', r'\1\n', text)
+        # 문장 단위로 분리 (종결 부호 포함)
+        sentences = re.split(r'([.!?])', text)
+        result = []
+        sentence_count = 0
+        next_break = 5  # 첫 문단은 5문장
 
-        # 연속된 줄바꿈 정리 (AI가 넣은 빈 줄은 보존)
-        text = re.sub(r'\n{3,}', '\n\n', text)
+        for i in range(0, len(sentences)-1, 2):
+            sentence = sentences[i].strip()
+            if sentence:
+                # 문장 + 종결부호
+                result.append(sentence + sentences[i+1])
+                sentence_count += 1
 
-        return text.strip()
+                # 문단 구분 조건
+                if sentence_count >= next_break:
+                    result.append('\n\n')
+                    sentence_count = 0
+                    # 첫 문단 이후는 3-4문장 랜덤
+                    next_break = random.randint(3, 4)
+                else:
+                    result.append('\n')
+
+        # 마지막 홀수 문장 처리
+        if len(sentences) % 2 == 1 and sentences[-1].strip():
+            result.append(sentences[-1])
+
+        return ''.join(result).strip()
     
     def apply_basic_corrections(self, text):
         """기본 교정"""
