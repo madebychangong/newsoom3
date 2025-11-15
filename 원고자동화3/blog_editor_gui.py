@@ -374,40 +374,18 @@ class BlogEditorGUI:
             return f"분석 실패: {str(e)}"
     
     def add_line_breaks(self, text):
-        """문장마다 줄바꿈 추가 + 문단 구분 (첫문단 4문장, 나머지 2~4문장)"""
+        """문장마다 줄바꿈 추가 (AI가 넣은 문단 구분은 보존)"""
         if not text:
             return text
 
-        # 문장 단위로 분리 (종결 부호 포함)
-        sentences = re.split(r'([.!?])', text)
-        result = []
-        sentence_count = 0
-        next_break = 4  # 첫 문단은 무조건 4문장
-        is_first_paragraph = True
+        # AI가 이미 문단을 나눴으면 보존
+        # 문장 종결 부호 뒤에 줄바꿈만 추가
+        text = re.sub(r'([.!?])\s+', r'\1\n', text)
 
-        for i in range(0, len(sentences)-1, 2):
-            sentence = sentences[i].strip()
-            if sentence:
-                # 문장 + 종결부호
-                result.append(sentence + sentences[i+1])
-                sentence_count += 1
+        # 연속된 줄바꿈 정리 (AI가 넣은 빈 줄은 보존)
+        text = re.sub(r'\n{3,}', '\n\n', text)
 
-                # 문단 구분 조건 충족 시 빈 줄 추가
-                if sentence_count >= next_break:
-                    result.append('\n\n')
-                    sentence_count = 0
-                    # 첫 문단 이후에는 2~4문장 랜덤
-                    if is_first_paragraph:
-                        is_first_paragraph = False
-                    next_break = random.randint(2, 4)
-                else:
-                    result.append('\n')
-
-        # 마지막 홀수 문장 처리
-        if len(sentences) % 2 == 1 and sentences[-1].strip():
-            result.append(sentences[-1])
-
-        return ''.join(result).strip()
+        return text.strip()
     
     def apply_basic_corrections(self, text):
         """기본 교정"""
@@ -551,7 +529,7 @@ class BlogEditorGUI:
 순서대로 작업:
 1. 글자수 체크 → 범위 내로 조절
 2. 키워드 삽입 → 띄어쓰기 유지하며 배치
-3. 문단 구분 → 2~4문장마다 빈 줄
+3. 문단 구분 → 작성하면서 2~4문장마다 빈 줄(\n\n) 직접 삽입
 4. 최종 검증 → 모든 규칙 확인
 </process>
 
@@ -562,14 +540,17 @@ R2. 핵심키워드 반복 (첫문단 2회 + 나머지문단 지정횟수)
   - 한글자 조사(을/를/이/가) 절대 금지
   - 띄어쓰기 단위 카운팅: "추천을"=카운트X / "추천 정보를"=카운트O
 R3. 핵심키워드로 시작하는 문장: 지정 개수
-R4. 첫 문단 필수 규칙
+R4. 첫 문단 필수 규칙 (매우 중요!)
   - 4문장 이상 작성
   - 핵심키워드 정확히 2회
   - **키워드 사이에 최소 2문장 이상 삽입 필수**
   - 예: 키워드(1문장)(2문장)키워드(추가문장들)
+  - 첫 문단 끝에 **반드시 빈 줄 2개(\n\n) 삽입**하여 문단 구분
 R5. 조각키워드: 첫문단 제외, 나머지문단 지정 횟수
 R6. 서브키워드: 2회+ 등장 단어 총 개수 (부족시 ^^, ??, .. 활용)
-R7. 문단 구분: 2~4문장마다 빈 줄
+R7. 문단 구분 (중요!)
+  - 2~4문장마다 **반드시 빈 줄(\n\n) 직접 삽입**
+  - 문단 구분 없이 연속으로 쓰지 말 것
 R8. 금칙어 대체:
 {forbidden_list}
 </rules>
@@ -581,7 +562,10 @@ R8. 금칙어 대체:
 - 모든 규칙을 만족하는 방법 찾기 (포기 금지)
 </conflict_resolution>
 
-<output>수정된 원고만 출력. 설명 금지.</output>"""
+<output>
+수정된 원고만 출력. 설명 금지.
+문단 사이에 빈 줄(\n\n)을 포함하여 출력할 것.
+</output>"""
 
         return system_prompt
 
