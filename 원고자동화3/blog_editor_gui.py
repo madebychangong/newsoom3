@@ -513,20 +513,27 @@ class BlogEditorGUI:
             alt_text = ", ".join(alternatives[:3])  # 최대 3개까지만
             forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
 
-        # 예시 생성 (최대 2개만 사용)
+        # 예시 생성 (전부 사용 - 캐싱되므로 첫 요청에만 비용)
         examples_text = ""
         if self.examples:
-            examples_text = "\n<examples>\n"
-            for i, ex in enumerate(self.examples[:2], 1):
-                original_preview = str(ex['original'])[:300] if ex['original'] else ""
-                edited_preview = str(ex['edited'])[:300] if ex['edited'] else ""
-                examples_text += f"""
-예시 {i}:
+            examples_text = "\n<examples>\n아래는 실제 수정 사례입니다. 특히 키워드 뒤 띄어쓰기와 한글자 조사 금지를 주목하세요!\n\n"
+            for i, ex in enumerate(self.examples, 1):
+                original_text = str(ex['original']) if ex['original'] else ""
+                edited_text = str(ex['edited']) if ex['edited'] else ""
+                examples_text += f"""[예시 {i}]
 키워드: {ex['keyword']}
-수정 전: {original_preview}...
-수정 후: {edited_preview}...
+글자수: {ex['char_count']}
+
+수정 전:
+{original_text}
+
+수정 후:
+{edited_text}
+
+{'─'*60}
+
 """
-            examples_text += "\n위 예시처럼 키워드 뒤 띄어쓰기를 유지하고 한글자 조사를 절대 붙이지 마세요!\n</examples>\n"
+            examples_text += "\n✅ 위 예시들처럼 반드시:\n- 키워드 뒤 띄어쓰기 유지\n- 한글자 조사(을/를/이/가) 절대 금지\n- 우회 표현 사용 (정보/내용/방법/리스트 등)\n</examples>\n"
 
         system_prompt = f"""<role>원고 수정 전문가. 기존 원고를 최대한 보존하며 규칙에 맞게 수정.</role>
 {examples_text}
