@@ -25,7 +25,7 @@ class BlogEditorGUI:
         
         # 데이터 저장 변수
         self.api_key = ""
-        self.selected_model = "claude-3-5-sonnet-20241022"  # 기본값
+        self.selected_model = "claude-sonnet-4-5"  # 기본값
         self.forbidden_words = {}
         self.examples = []
         self.input_file = ""
@@ -115,16 +115,16 @@ class BlogEditorGUI:
 
         tk.Label(model_frame, text="모델 선택:", font=("맑은 고딕", 9)).pack(side=tk.LEFT, padx=(0, 10))
 
-        self.model_var = tk.StringVar(value="claude-3-5-sonnet-20241022")
+        self.model_var = tk.StringVar(value="claude-sonnet-4-5")
         model_combo = ttk.Combobox(model_frame, textvariable=self.model_var,
                                    values=[
-                                       "claude-3-5-sonnet-20241022",
-                                       "claude-3-5-haiku-20241022"
+                                       "claude-sonnet-4-5",
+                                       "claude-haiku-4-5"
                                    ], state="readonly", width=30)
         model_combo.pack(side=tk.LEFT)
         model_combo.bind("<<ComboboxSelected>>", self.on_model_change)
 
-        self.model_info = tk.Label(model_frame, text="(규칙 준수: 최고, 비용: ₩3/₩15)",
+        self.model_info = tk.Label(model_frame, text="(규칙 준수: 최고, 비용: ₩26/개)",
                                    font=("맑은 고딕", 8), fg="#7f8c8d")
         self.model_info.pack(side=tk.LEFT, padx=(10, 0))
         
@@ -180,12 +180,12 @@ class BlogEditorGUI:
         selected = self.model_var.get()
         self.selected_model = selected
 
-        if selected == "claude-3-5-sonnet-20241022":
-            self.model_info.config(text="(규칙 준수: 최고, 비용: ₩3/₩15)")
-            self.log("✅ 모델 변경: Claude 3.5 Sonnet (최고 정확도)", "#3498db")
-        elif selected == "claude-3-5-haiku-20241022":
-            self.model_info.config(text="(규칙 준수: 높음, 비용: ₩0.8/₩4)")
-            self.log("✅ 모델 변경: Claude 3.5 Haiku (빠른 처리)", "#3498db")
+        if selected == "claude-sonnet-4-5":
+            self.model_info.config(text="(규칙 준수: 최고, 비용: ₩26/개)")
+            self.log("✅ 모델 변경: Claude Sonnet 4.5 (최고 정확도)", "#3498db")
+        elif selected == "claude-haiku-4-5":
+            self.model_info.config(text="(규칙 준수: 높음, 비용: ₩9/개)")
+            self.log("✅ 모델 변경: Claude Haiku 4.5 (빠른 처리)", "#3498db")
         
     def log(self, message, color=None):
         """로그 출력"""
