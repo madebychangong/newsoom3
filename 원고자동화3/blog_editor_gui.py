@@ -15,6 +15,7 @@ from datetime import datetime
 import threading
 import json
 import base64
+import random
 
 class BlogEditorGUI:
     def __init__(self, root):
@@ -373,18 +374,36 @@ class BlogEditorGUI:
             return f"분석 실패: {str(e)}"
     
     def add_line_breaks(self, text):
-        """문장마다 줄바꿈 추가"""
+        """문장마다 줄바꿈 추가 + 2~4문장마다 문단 구분"""
         if not text:
             return text
 
-        # 문장 종결 부호 뒤에 줄바꿈 추가
-        # 이미 줄바꿈이 있으면 추가하지 않음
-        text = re.sub(r'([.!?])\s+', r'\1\n', text)
+        # 문장 단위로 분리 (종결 부호 포함)
+        sentences = re.split(r'([.!?])', text)
+        result = []
+        sentence_count = 0
+        next_break = random.randint(2, 4)  # 첫 문단 구분까지 문장 수
 
-        # 연속된 줄바꿈을 2개로 제한 (문단 구분 보존)
-        text = re.sub(r'\n{3,}', '\n\n', text)
+        for i in range(0, len(sentences)-1, 2):
+            sentence = sentences[i].strip()
+            if sentence:
+                # 문장 + 종결부호
+                result.append(sentence + sentences[i+1])
+                sentence_count += 1
 
-        return text.strip()
+                # 2~4문장마다 빈 줄 추가 (문단 구분)
+                if sentence_count >= next_break:
+                    result.append('\n\n')
+                    sentence_count = 0
+                    next_break = random.randint(2, 4)  # 다음 문단 구분까지 문장 수
+                else:
+                    result.append('\n')
+
+        # 마지막 홀수 문장 처리
+        if len(sentences) % 2 == 1 and sentences[-1].strip():
+            result.append(sentences[-1])
+
+        return ''.join(result).strip()
     
     def apply_basic_corrections(self, text):
         """기본 교정"""
