@@ -390,33 +390,31 @@ class BlogEditorGUI:
         """기본 교정"""
         if not text:
             return text
-        
-        # 1. 네요 -> 내요 (무조건)
-        text = text.replace('네요', '내요')
-        
-        # 2. 더라 -> 더 라 (무조건)
-        text = text.replace('더라', '더 라')
-        
-        # 3. 이모티콘 앞뒤 띄어쓰기 처리 (서브키워드 카운팅을 위해)
+
+        # 1. 이모티콘 앞뒤 띄어쓰기 처리 (서브키워드 카운팅을 위해)
         emoticons = ['^^', '??', '!!', '~~', '...', 'ㅠㅠ', 'TT', 'ㅎㅎ', ';;', '--', 'ㅋㅋ']
-        
+
         for emoticon in emoticons:
             # 이모티콘 앞에 띄어쓰기 없으면 추가
             # "좋아요^^" → "좋아요 ^^"
             text = re.sub(r'([^\s])' + re.escape(emoticon), r'\1 ' + emoticon, text)
-            
+
             # 이모티콘 뒤 문장부호 제거하고 띄어쓰기
             # "^^ ." → "^^ "
             text = text.replace(f'{emoticon}.', f'{emoticon} ')
             text = text.replace(f'{emoticon},', f'{emoticon} ')
             text = text.replace(f'{emoticon}!', f'{emoticon} ')
             text = text.replace(f'{emoticon}?', f'{emoticon} ')
-            
+
             # 이모티콘 뒤에 아무것도 없거나 문자가 바로 오면 띄어쓰기 추가
             # "^^ 다음" 은 그대로, "^^다음" → "^^ 다음"
             text = re.sub(re.escape(emoticon) + r'([^\s.,!?])', emoticon + r' \1', text)
 
         # 금칙어 치환은 AI가 직접 하도록 제거 (테스트용)
+
+        # 2. 맨 마지막에 강제 적용 (무조건 변동)
+        text = text.replace('네요', '내요')
+        text = text.replace('더라', '더 라')
 
         return text
     
