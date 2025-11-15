@@ -29,43 +29,8 @@ class BlogEditorGUI:
         self.examples = []
         self.input_file = ""
         self.is_processing = False
-        self.config_file = os.path.join(os.path.expanduser("~"), ".blog_editor_config.json")
 
         self.setup_ui()
-        self.load_saved_api_key()  # 저장된 API 키 불러오기
-        
-    def load_saved_api_key(self):
-        """저장된 API 키 불러오기"""
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    saved_key = config.get('api_key', '')
-                    
-                    if saved_key:
-                        # 간단한 디코딩 (보안은 약하지만 평문보다는 나음)
-                        decoded_key = base64.b64decode(saved_key).decode('utf-8')
-                        self.api_key = decoded_key
-                        self.api_entry.insert(0, decoded_key)
-                        self.api_status.config(text="✅ 저장된 API 키 불러옴", fg="green")
-                        self.log("✅ 저장된 API 키를 불러왔습니다", "#27ae60")
-                        self.check_ready()
-        except Exception as e:
-            self.log(f"⚠️  저장된 API 키 불러오기 실패: {str(e)}", "#e67e22")
-    
-    def save_api_key_to_file(self):
-        """API 키를 파일로 저장"""
-        try:
-            # 간단한 인코딩
-            encoded_key = base64.b64encode(self.api_key.encode('utf-8')).decode('utf-8')
-            
-            config = {'api_key': encoded_key}
-            
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f)
-                
-        except Exception as e:
-            self.log(f"⚠️  API 키 저장 실패: {str(e)}", "#e67e22")
         
     def setup_ui(self):
         """UI 구성"""
@@ -168,20 +133,16 @@ class BlogEditorGUI:
         self.root.update()
         
     def save_api_key(self):
-        """API 키 저장 (검증 없이)"""
+        """API 키 저장"""
         self.api_key = self.api_entry.get().strip()
-        
+
         if not self.api_key:
             messagebox.showwarning("경고", "API 키를 입력해주세요.")
             return
-        
-        # 파일로 저장
-        self.save_api_key_to_file()
-        
+
         self.api_status.config(text="✅ API 키 저장 완료 (gemini-2.5-pro)", fg="green")
         self.log("✅ API 키가 저장되었습니다", "#27ae60")
         self.check_ready()
-        messagebox.showinfo("저장 완료", "API 키가 저장되었습니다.\n다음 실행 시 자동으로 불러옵니다.")
             
     def select_file(self):
         """파일 선택"""
