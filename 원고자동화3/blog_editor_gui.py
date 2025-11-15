@@ -513,7 +513,23 @@ class BlogEditorGUI:
             alt_text = ", ".join(alternatives[:3])  # 최대 3개까지만
             forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
 
+        # 예시 생성 (최대 2개만 사용)
+        examples_text = ""
+        if self.examples:
+            examples_text = "\n<examples>\n"
+            for i, ex in enumerate(self.examples[:2], 1):
+                original_preview = str(ex['original'])[:300] if ex['original'] else ""
+                edited_preview = str(ex['edited'])[:300] if ex['edited'] else ""
+                examples_text += f"""
+예시 {i}:
+키워드: {ex['keyword']}
+수정 전: {original_preview}...
+수정 후: {edited_preview}...
+"""
+            examples_text += "\n위 예시처럼 키워드 뒤 띄어쓰기를 유지하고 한글자 조사를 절대 붙이지 마세요!\n</examples>\n"
+
         system_prompt = f"""<role>원고 수정 전문가. 기존 원고를 최대한 보존하며 규칙에 맞게 수정.</role>
+{examples_text}
 
 <editing_strategy>
 ❌ 처음부터 다시 쓰지 말 것!
