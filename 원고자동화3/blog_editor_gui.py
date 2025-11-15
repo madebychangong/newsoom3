@@ -29,7 +29,8 @@ class BlogEditorGUI:
         self.examples = []
         self.input_file = ""
         self.is_processing = False
-        
+        self.config_file = os.path.join(os.path.expanduser("~"), ".blog_editor_config.json")
+
         self.setup_ui()
         self.load_saved_api_key()  # 저장된 API 키 불러오기
         
