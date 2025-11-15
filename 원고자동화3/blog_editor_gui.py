@@ -482,16 +482,42 @@ class BlogEditorGUI:
         
         return rule_text
         
-    def create_system_prompt(self):
-        """시스템 프롬프트 생성 (고정 부분 - 캐싱용)"""
+    def create_stage1_prompt(self):
+        """1단계 시스템 프롬프트: 글자수와 키워드 자연스럽게 삽입"""
 
         # 금칙어 리스트 생성
         forbidden_list = ""
         for forbidden, alternatives in self.forbidden_words.items():
-            alt_text = ", ".join(alternatives[:3])  # 최대 3개까지만
+            alt_text = ", ".join(alternatives[:3])
             forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
 
-        # 예시 생성 (최대 5개 - 테스트 중 캐시 만료 고려)
+        system_prompt = f"""<role>원고 수정 전문가. 1단계: 글자수와 키워드를 자연스럽게 조정</role>
+
+<strategy>
+기존 원고를 최대한 보존하며:
+1. 글자수를 목표 범위로 조정
+2. 키워드를 자연스럽게 삽입
+3. 금칙어 대체
+4. 원문 톤/스타일 유지
+</strategy>
+
+<rules>
+R1. 글자수: 목표 ±5% 범위 내 (최우선!)
+R2. 핵심키워드: 첫문단 2회 + 나머지문단 지정횟수 (대략적으로)
+R3. 조각키워드: 지정횟수 (대략적으로)
+R4. 금칙어 대체:
+{forbidden_list}
+R5. 원문 톤/스타일 유지
+</rules>
+
+<output>수정된 원고만 출력. 설명 금지.</output>"""
+
+        return system_prompt
+
+    def create_stage2_prompt(self):
+        """2단계 시스템 프롬프트: 세부 규칙 준수"""
+
+        # 예시 생성 (최대 5개)
         examples_text = ""
         if self.examples:
             examples_text = "\n<examples>\n아래는 실제 수정 사례입니다. 특히 키워드 뒤 띄어쓰기와 한글자 조사 금지를 주목하세요!\n\n"
@@ -513,97 +539,94 @@ class BlogEditorGUI:
 """
             examples_text += "\n✅ 위 예시들처럼 반드시:\n- 키워드 뒤 띄어쓰기 유지\n- 한글자 조사(을/를/이/가) 절대 금지\n- 우회 표현 사용 (정보/내용/방법/리스트 등)\n</examples>\n"
 
-        system_prompt = f"""<role>원고 수정 전문가. 기존 원고를 최대한 보존하며 규칙에 맞게 수정.</role>
+        system_prompt = f"""<role>원고 정제 전문가. 2단계: 세부 규칙을 정확히 적용 (글자수 절대 변경 금지!)</role>
 {examples_text}
 
-<editing_strategy>
-❌ 처음부터 다시 쓰지 말 것!
-✅ 기존 원고 보존하며 필요한 부분만 수정:
-1. 글자수 조절: 부족하면 추가, 넘치면 삭제
-2. 키워드 삽입: 자연스럽게 배치
-3. 어색한 표현만 교정
-4. 원문 톤/스타일 유지
-</editing_strategy>
-
-<process>
-순서대로 작업:
-1. 글자수 체크 → 범위 내로 조절
-2. 키워드 삽입 → 띄어쓰기 유지하며 배치
-3. 문단 구분 → 작성하면서 2~4문장마다 빈 줄(\n\n) 직접 삽입
-4. 최종 검증 → 모든 규칙 확인
-</process>
+<critical>
+⚠️ 글자수를 절대 변경하지 마세요! 1단계에서 이미 맞췄습니다.
+띄어쓰기와 구조만 조정하세요.
+</critical>
 
 <rules>
-R1. 글자수: 목표 ±5% 범위 내
-R2. 핵심키워드 반복 (첫문단 2회 + 나머지문단 지정횟수)
-  - 뒤 띄어쓰기 필수: "추천을" (X) → "추천 정보를" (O)
-  - 한글자 조사(을/를/이/가) 절대 금지
-  - 띄어쓰기 단위 카운팅: "추천을"=카운트X / "추천 정보를"=카운트O
-R3. 핵심키워드로 시작하는 문장: 지정 개수
-R4. 첫 문단 필수 규칙 (매우 중요!)
-  - 4~5문장 작성
+R1. 첫 문단 구조 (매우 중요!)
+  - 정확히 4~5문장
   - 핵심키워드 정확히 2회
-  - **키워드 사이에 최소 2문장 이상 삽입 필수**
-  - 예: 키워드(1문장)(2문장)키워드(추가문장들)
-  - 첫 문단 끝에 **반드시 빈 줄 2개(\n\n) 삽입**하여 문단 구분
-R5. 조각키워드: 첫문단 제외, 나머지문단 지정 횟수
-R6. 서브키워드: 2회+ 등장 단어 총 개수 (부족시 ^^, ??, .. 활용)
-R7. 문단 구분 (중요!)
-  - 2~4문장마다 **반드시 빈 줄(\n\n) 직접 삽입**
-  - 문단 구분 없이 연속으로 쓰지 말 것
-R8. 금칙어 대체:
-{forbidden_list}
-</rules>
+  - 키워드 사이에 최소 2문장 삽입
+  - 첫 문단 끝에 빈 줄(\n\n) 삽입
 
-<conflict_resolution>
-규칙 충돌 시 해결법:
-- 글자수 vs 키워드: 짧은 표현으로 키워드 삽입
-- 띄어쓰기 vs 자연스러움: 우회 표현 사용
-- 모든 규칙을 만족하는 방법 찾기 (포기 금지)
-</conflict_resolution>
+R2. 키워드 띄어쓰기 (절대 규칙!)
+  - 모든 키워드 뒤 띄어쓰기 필수
+  - "추천을" (X) → "추천 정보를" (O)
+  - 한글자 조사(을/를/이/가) 절대 금지!
+  - 우회 표현 사용: 정보/내용/방법/리스트/관련/사항
+
+R3. 핵심키워드 시작 문장: 지정 개수
+
+R4. 서브키워드: 지정 개수 (부족시 ^^, ??, .. 활용)
+
+R5. 문단 구분
+  - 2~4문장마다 빈 줄(\n\n) 삽입
+  - 연속으로 쓰지 말 것
+</rules>
 
 <output>
 수정된 원고만 출력. 설명 금지.
-문단 사이에 빈 줄(\n\n)을 포함하여 출력할 것.
+글자수를 절대 변경하지 말 것!
 </output>"""
 
         return system_prompt
 
-    def create_user_prompt(self, row_data):
-        """유저 프롬프트 생성 (변동 부분)"""
+    def create_stage1_user_prompt(self, row_data, original_text):
+        """1단계 유저 프롬프트: 글자수와 키워드 삽입"""
 
         # 키워드 규칙 파싱
         main_keyword_rule = self.parse_keyword_rule(row_data['main_keyword_count'])
         sub_keyword_rule = self.parse_sub_keywords(row_data['sub_keyword_count'])
-        extra_keyword_count = str(row_data['extra_keyword_count']).strip() if row_data['extra_keyword_count'] else "0"
 
         # 글자수 및 오차 계산
         target_chars = int(row_data['char_count']) if row_data['char_count'] else 1000
-        char_tolerance = int(target_chars * 0.05)  # 5% 오차
-
-        # 통키워드 문장 시작 횟수
-        keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
-
-        # 원고에서 제목 라인 제거 (맨 위 # 으로 시작하는 한 줄)
-        original_text = row_data['original']
-        if original_text.strip().startswith('#'):
-            # 첫 줄 제거
-            lines = original_text.split('\n', 1)
-            original_text = lines[1] if len(lines) > 1 else ""
-            original_text = original_text.strip()
+        char_tolerance = int(target_chars * 0.05)
 
         user_prompt = f"""<task>
 <conditions>
-핵심키워드: {row_data['keyword']} (첫문단 2회 + 나머지 {main_keyword_rule})
+핵심키워드: {row_data['keyword']} (첫문단 약 2회 + 나머지 {main_keyword_rule})
 조각키워드: {sub_keyword_rule}
-서브키워드: {extra_keyword_count}개
-글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}
-핵심키워드 시작문장: {keyword_start_count}개
+글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance} (최우선!)
 </conditions>
 
 <original>
 {original_text}
 </original>
+</task>"""
+
+        return user_prompt
+
+    def create_stage2_user_prompt(self, row_data, stage1_result):
+        """2단계 유저 프롬프트: 세부 규칙 적용"""
+
+        extra_keyword_count = str(row_data['extra_keyword_count']).strip() if row_data['extra_keyword_count'] else "0"
+        keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
+
+        user_prompt = f"""<task>
+<stage1_result>
+{stage1_result}
+</stage1_result>
+
+<requirements>
+핵심키워드: {row_data['keyword']}
+- 첫문단: 정확히 2회 (사이에 2문장 이상)
+- 나머지문단: 지정 횟수
+- 키워드로 시작하는 문장: {keyword_start_count}개
+
+서브키워드: {extra_keyword_count}개
+
+중요:
+- 글자수 절대 변경 금지!
+- 키워드 뒤 한글자 조사(을/를/이/가) 절대 금지
+- 우회 표현 사용: 정보/내용/방법/리스트/관련/사항
+- 첫문단 4~5문장
+- 문단 구분 빈 줄(\n\n)
+</requirements>
 </task>"""
 
         return user_prompt
@@ -657,40 +680,69 @@ R8. 금칙어 대체:
                 
                 self.log(f"키워드: {row_data['keyword']}")
                 self.log(f"목표 글자수: {row_data['char_count']}자")
-                
-                # AI 수정
-                self.log("⏳ AI 수정 중... (10~30초 소요, 캐싱 적용)", "#f39c12")
-                system_prompt = self.create_system_prompt()
-                user_prompt = self.create_user_prompt(row_data)
 
-                message = client.messages.create(
+                # 원고에서 제목 라인 제거 (맨 위 # 으로 시작하는 한 줄)
+                original_text = row_data['original']
+                if original_text and original_text.strip().startswith('#'):
+                    lines = original_text.split('\n', 1)
+                    original_text = lines[1] if len(lines) > 1 else ""
+                    original_text = original_text.strip()
+
+                # ===== 1단계: 글자수와 키워드 삽입 =====
+                self.log("⏳ [1단계] 글자수 맞추기 및 키워드 삽입 중...", "#f39c12")
+                stage1_system = self.create_stage1_prompt()
+                stage1_user = self.create_stage1_user_prompt(row_data, original_text)
+
+                stage1_message = client.messages.create(
                     model=self.selected_model,
                     max_tokens=4096,
                     system=[
                         {
                             "type": "text",
-                            "text": system_prompt,
+                            "text": stage1_system,
                             "cache_control": {"type": "ephemeral"}
                         }
                     ],
                     messages=[
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": stage1_user}
                     ]
                 )
-                edited_text = message.content[0].text.strip()
-                
-                # 마크다운 형식 제거
+                stage1_result = stage1_message.content[0].text.strip()
+                stage1_result = self.clean_markdown(stage1_result)
+                self.log(f"✅ [1단계] 완료 (글자수: {len(stage1_result)}자)", "#27ae60")
+
+                # ===== 2단계: 세부 규칙 적용 =====
+                self.log("⏳ [2단계] 띄어쓰기 및 문단 구조 조정 중...", "#f39c12")
+                stage2_system = self.create_stage2_prompt()
+                stage2_user = self.create_stage2_user_prompt(row_data, stage1_result)
+
+                stage2_message = client.messages.create(
+                    model=self.selected_model,
+                    max_tokens=4096,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": stage2_system,
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ],
+                    messages=[
+                        {"role": "user", "content": stage2_user}
+                    ]
+                )
+                edited_text = stage2_message.content[0].text.strip()
                 edited_text = self.clean_markdown(edited_text)
-                
-                # AI 생성 후 기본 교정 적용 (네요→내요, 더라→더 라, 금칙어)
+                self.log(f"✅ [2단계] 완료 (최종 글자수: {len(edited_text)}자)", "#27ae60")
+
+                # 기본 교정 적용 (네요→내요, 더라→더 라)
                 edited_text = self.apply_basic_corrections(edited_text)
-                
+
                 # 문장마다 줄바꿈 추가
                 edited_text = self.add_line_breaks(edited_text)
-                
+
                 # 결과 저장 (M열 = 13번)
                 ws.cell(row_idx, 13).value = edited_text
-                self.log(f"✅ AI 수정 및 교정 완료 (결과 글자수: {len(edited_text)}자)", "#27ae60")
+                self.log(f"🎯 최종 완료 (결과 글자수: {len(edited_text)}자)", "#27ae60")
                 
                 # 화자 분석 (N열 = 14번)
                 self.log("⏳ 화자 정보 분석 중...", "#3498db")
