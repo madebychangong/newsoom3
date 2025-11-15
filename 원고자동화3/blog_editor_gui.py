@@ -374,7 +374,7 @@ class BlogEditorGUI:
             return f"분석 실패: {str(e)}"
     
     def add_line_breaks(self, text):
-        """문장마다 줄바꿈 추가 + 2~4문장마다 문단 구분"""
+        """문장마다 줄바꿈 추가 + 문단 구분 (첫문단 4문장, 나머지 2~4문장)"""
         if not text:
             return text
 
@@ -382,7 +382,8 @@ class BlogEditorGUI:
         sentences = re.split(r'([.!?])', text)
         result = []
         sentence_count = 0
-        next_break = random.randint(2, 4)  # 첫 문단 구분까지 문장 수
+        next_break = 4  # 첫 문단은 무조건 4문장
+        is_first_paragraph = True
 
         for i in range(0, len(sentences)-1, 2):
             sentence = sentences[i].strip()
@@ -391,11 +392,14 @@ class BlogEditorGUI:
                 result.append(sentence + sentences[i+1])
                 sentence_count += 1
 
-                # 2~4문장마다 빈 줄 추가 (문단 구분)
+                # 문단 구분 조건 충족 시 빈 줄 추가
                 if sentence_count >= next_break:
                     result.append('\n\n')
                     sentence_count = 0
-                    next_break = random.randint(2, 4)  # 다음 문단 구분까지 문장 수
+                    # 첫 문단 이후에는 2~4문장 랜덤
+                    if is_first_paragraph:
+                        is_first_paragraph = False
+                    next_break = random.randint(2, 4)
                 else:
                     result.append('\n')
 
