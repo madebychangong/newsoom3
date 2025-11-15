@@ -562,28 +562,18 @@ R10. 금칙어 대체:
             original_text = original_text.strip()
 
         user_prompt = f"""<task>
-<requirements>
-핵심키워드: {row_data['keyword']}
-통키워드: {main_keyword_rule}
-조각키워드: {sub_keyword_rule}
-서브키워드: {extra_keyword_count}개
-글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}자
-키워드 시작 문장: {keyword_start_count}개
-</requirements>
+<conditions>
+키워드: {row_data['keyword']}
+통: {main_keyword_rule}
+조각: {sub_keyword_rule}
+서브: {extra_keyword_count}개
+글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}
+키워드시작문장: {keyword_start_count}개
+</conditions>
 
 <original>
 {original_text}
 </original>
-
-<checklist>
-1. 글자수 범위 준수
-2. 첫 문단 4문장+ / '{row_data['keyword']}' 2회
-3. 키워드 횟수 정확
-4. 서브키워드 {extra_keyword_count}개
-5. 키워드 시작 문장 {keyword_start_count}개
-6. 금칙어 0개
-7. 문단 구분 적절
-</checklist>
 </task>"""
 
         return user_prompt
