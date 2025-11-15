@@ -142,7 +142,7 @@ class BlogEditorGUI:
         self.file_button = ttk.Button(file_input_frame, text="📁 파일 선택", command=self.select_file)
         self.file_button.pack(side=tk.LEFT)
         
-        file_help = tk.Label(file_frame, text="💡 같은 폴더에 금칙어_리스트.xlsx, 수정전후.xlsx, 블로그_작업_엑셀템플릿.xlsx 필요", 
+        file_help = tk.Label(file_frame, text="💡 같은 폴더에 금칙어_리스트.xlsx 필요",
                             font=("맑은 고딕", 8), fg="#7f8c8d")
         file_help.pack(anchor=tk.W, pady=(5, 0))
         
