@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 블로그 원고 자동 수정 프로그램 (GUI 버전)
-Gemini API 기반
+Claude API 기반
 """
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import openpyxl
-import google.generativeai as genai
+import anthropic
 import re
 import os
 from datetime import datetime
@@ -25,6 +25,7 @@ class BlogEditorGUI:
         
         # 데이터 저장 변수
         self.api_key = ""
+        self.selected_model = "claude-sonnet-4-5-20250929"  # 기본값
         self.forbidden_words = {}
         self.examples = []
         self.input_file = ""
@@ -77,35 +78,55 @@ class BlogEditorGUI:
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 20))
         
-        title_label = tk.Label(title_frame, text="📝 블로그 원고 자동 수정 프로그램", 
+        title_label = tk.Label(title_frame, text="📝 블로그 원고 자동 수정 프로그램",
                               font=("맑은 고딕", 18, "bold"), fg="#2c3e50")
         title_label.pack()
-        
-        subtitle_label = tk.Label(title_frame, text="Gemini 2.5 Pro AI 기반", 
+
+        subtitle_label = tk.Label(title_frame, text="Claude AI 기반",
                                  font=("맑은 고딕", 10), fg="#7f8c8d")
         subtitle_label.pack()
         
-        # 1. API 키 입력 섹션
-        api_frame = ttk.LabelFrame(main_frame, text="  1️⃣  Gemini API 키 입력  ", padding="10")
+        # 1. API 키 및 모델 선택 섹션
+        api_frame = ttk.LabelFrame(main_frame, text="  1️⃣  Claude API 설정  ", padding="10")
         api_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
+        # API 키 입력
         api_input_frame = ttk.Frame(api_frame)
         api_input_frame.pack(fill=tk.X)
-        
+
         self.api_entry = ttk.Entry(api_input_frame, width=50, show="*", font=("맑은 고딕", 10))
         self.api_entry.pack(side=tk.LEFT, padx=(0, 10), fill=tk.X, expand=True)
-        
+
         self.api_button = ttk.Button(api_input_frame, text="저장", command=self.save_api_key)
         self.api_button.pack(side=tk.LEFT)
-        
-        self.api_status = tk.Label(api_frame, text="❌ API 키 미등록", 
+
+        self.api_status = tk.Label(api_frame, text="❌ API 키 미등록",
                                    font=("맑은 고딕", 9), fg="red")
         self.api_status.pack(anchor=tk.W, pady=(5, 0))
-        
-        api_help = tk.Label(api_frame, text="💡 API 키 발급: https://aistudio.google.com/app/apikey", 
+
+        api_help = tk.Label(api_frame, text="💡 API 키 발급: https://console.anthropic.com/",
                            font=("맑은 고딕", 8), fg="#3498db", cursor="hand2")
         api_help.pack(anchor=tk.W)
-        api_help.bind("<Button-1>", lambda e: self.open_url("https://aistudio.google.com/app/apikey"))
+        api_help.bind("<Button-1>", lambda e: self.open_url("https://console.anthropic.com/"))
+
+        # 모델 선택
+        model_frame = ttk.Frame(api_frame)
+        model_frame.pack(fill=tk.X, pady=(10, 0))
+
+        tk.Label(model_frame, text="모델 선택:", font=("맑은 고딕", 9)).pack(side=tk.LEFT, padx=(0, 10))
+
+        self.model_var = tk.StringVar(value="claude-sonnet-4-5-20250929")
+        model_combo = ttk.Combobox(model_frame, textvariable=self.model_var,
+                                   values=[
+                                       "claude-sonnet-4-5-20250929",
+                                       "claude-haiku-4-5-20241015"
+                                   ], state="readonly", width=30)
+        model_combo.pack(side=tk.LEFT)
+        model_combo.bind("<<ComboboxSelected>>", self.on_model_change)
+
+        self.model_info = tk.Label(model_frame, text="(규칙 준수: 최고, 비용: ₩26/개)",
+                                   font=("맑은 고딕", 8), fg="#7f8c8d")
+        self.model_info.pack(side=tk.LEFT, padx=(10, 0))
         
         # 2. 파일 선택 섹션
         file_frame = ttk.LabelFrame(main_frame, text="  2️⃣  수정할 엑셀 파일 선택  ", padding="10")
@@ -153,6 +174,18 @@ class BlogEditorGUI:
         """URL 열기"""
         import webbrowser
         webbrowser.open(url)
+
+    def on_model_change(self, event=None):
+        """모델 선택 변경 시 처리"""
+        selected = self.model_var.get()
+        self.selected_model = selected
+
+        if selected == "claude-sonnet-4-5-20250929":
+            self.model_info.config(text="(규칙 준수: 최고, 비용: ₩26/개)")
+            self.log("✅ 모델 변경: Claude Sonnet 4.5 (최고 정확도)", "#3498db")
+        elif selected == "claude-haiku-4-5-20241015":
+            self.model_info.config(text="(규칙 준수: 높음, 비용: ₩9/개)")
+            self.log("✅ 모델 변경: Claude Haiku 4.5 (빠른 처리)", "#3498db")
         
     def log(self, message, color=None):
         """로그 출력"""
@@ -177,8 +210,8 @@ class BlogEditorGUI:
         
         # 파일로 저장
         self.save_api_key_to_file()
-        
-        self.api_status.config(text="✅ API 키 저장 완료 (gemini-2.5-pro)", fg="green")
+
+        self.api_status.config(text=f"✅ API 키 저장 완료 ({self.model_var.get()})", fg="green")
         self.log("✅ API 키가 저장되었습니다", "#27ae60")
         self.check_ready()
         messagebox.showinfo("저장 완료", "API 키가 저장되었습니다.\n다음 실행 시 자동으로 불러옵니다.")
@@ -299,11 +332,11 @@ class BlogEditorGUI:
             self.log(f"❌ 예시 로딩 실패: {str(e)}", "#e74c3c")
             return False
             
-    def analyze_speaker(self, text, model):
+    def analyze_speaker(self, text, client):
         """화자 정보 분석 (성별, 연령대, 상황)"""
         if not text:
             return "분석 불가"
-        
+
         try:
             analysis_prompt = f"""
 다음 블로그 글을 분석하여 작성자(화자)의 정보를 유추해주세요.
@@ -321,15 +354,21 @@ class BlogEditorGUI:
 연령대: 30대
 상황: 자녀 키 성장 고민
 """
-            
-            response = model.generate_content(analysis_prompt)
-            analysis = response.text.strip()
-            
+
+            message = client.messages.create(
+                model=self.selected_model,
+                max_tokens=1024,
+                messages=[
+                    {"role": "user", "content": analysis_prompt}
+                ]
+            )
+            analysis = message.content[0].text.strip()
+
             # 한 줄로 정리
             analysis = analysis.replace('\n', ' / ')
-            
+
             return analysis
-            
+
         except Exception as e:
             return f"분석 실패: {str(e)}"
     
@@ -448,7 +487,7 @@ class BlogEditorGUI:
         return rule_text
         
     def create_prompt(self, row_data):
-        """Gemini용 프롬프트 생성"""
+        """Claude용 프롬프트 생성"""
         
         # 키워드 규칙 파싱
         main_keyword_rule = self.parse_keyword_rule(row_data['main_keyword_count'])
@@ -597,11 +636,10 @@ class BlogEditorGUI:
             # 입력 파일 로드
             wb = openpyxl.load_workbook(self.input_file)
             ws = wb.active
-            
-            # Gemini 모델 초기화
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel('gemini-2.5-pro')
-            
+
+            # Claude 클라이언트 초기화
+            client = anthropic.Anthropic(api_key=self.api_key)
+
             total_rows = ws.max_row - 1
             
             for row_idx in range(2, ws.max_row + 1):
@@ -630,9 +668,15 @@ class BlogEditorGUI:
                 # AI 수정
                 self.log("⏳ AI 수정 중... (10~30초 소요)", "#f39c12")
                 prompt = self.create_prompt(row_data)
-                
-                response = model.generate_content(prompt)
-                edited_text = response.text.strip()
+
+                message = client.messages.create(
+                    model=self.selected_model,
+                    max_tokens=4096,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                edited_text = message.content[0].text.strip()
                 
                 # 마크다운 형식 제거
                 edited_text = self.clean_markdown(edited_text)
@@ -649,7 +693,7 @@ class BlogEditorGUI:
                 
                 # 화자 분석 (N열 = 14번)
                 self.log("⏳ 화자 정보 분석 중...", "#3498db")
-                speaker_info = self.analyze_speaker(edited_text, model)
+                speaker_info = self.analyze_speaker(edited_text, client)
                 ws.cell(row_idx, 14).value = speaker_info
                 self.log(f"✅ 화자 분석 완료: {speaker_info}", "#27ae60")
                 
