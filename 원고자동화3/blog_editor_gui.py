@@ -607,10 +607,13 @@ R8. 금칙어 대체:
             
             # 같은 폴더 경로
             base_dir = os.path.dirname(self.input_file)
-            
+
             # 금칙어 로딩
             if not self.load_forbidden_words(base_dir):
                 messagebox.showwarning("경고", "금칙어 파일을 찾을 수 없습니다.\n같은 폴더에 '금칙어_리스트.xlsx'를 넣어주세요.")
+
+            # 예시 파일 로딩
+            self.load_examples(base_dir)
             
             # 입력 파일 로드
             wb = openpyxl.load_workbook(self.input_file)
