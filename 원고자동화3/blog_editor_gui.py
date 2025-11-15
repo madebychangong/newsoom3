@@ -511,19 +511,16 @@ class BlogEditorGUI:
 
 <rules>
 R1. 글자수: 목표 ±5% 범위 내
-R2. 첫 문단: 4문장 이상 + 핵심키워드 정확히 2회
-R3. 키워드 뒤 띄어쓰기 필수
-  - "추천을" (X) → "추천 정보를" (O)
+R2. 핵심키워드 반복 (첫문단 2회 + 나머지문단 지정횟수)
+  - 뒤 띄어쓰기 필수: "추천을" (X) → "추천 정보를" (O)
   - 한글자 조사(을/를/이/가) 절대 금지
-R4. 키워드 카운팅: 띄어쓰기 단위
-  - "추천을" → 카운트 안됨
-  - "추천 정보를" → 카운트됨
-R5. 통키워드: 첫문단 2회 + 나머지 지정횟수
-R6. 조각키워드: 첫문단 제외, 나머지 지정횟수
-R7. 서브키워드: 2회+ 등장 단어 수 (부족시 ^^, ??, .. 등 활용)
-R8. 키워드 시작 문장: 지정 개수
-R9. 문단 구분: 2~4문장마다 빈 줄
-R10. 금칙어 대체:
+  - 띄어쓰기 단위 카운팅: "추천을"=카운트X / "추천 정보를"=카운트O
+R3. 핵심키워드로 시작하는 문장: 지정 개수
+R4. 첫 문단: 4문장 이상
+R5. 조각키워드: 첫문단 제외, 나머지문단 지정 횟수
+R6. 서브키워드: 2회+ 등장 단어 총 개수 (부족시 ^^, ??, .. 활용)
+R7. 문단 구분: 2~4문장마다 빈 줄
+R8. 금칙어 대체:
 {forbidden_list}
 </rules>
 
@@ -563,12 +560,11 @@ R10. 금칙어 대체:
 
         user_prompt = f"""<task>
 <conditions>
-키워드: {row_data['keyword']}
-통: {main_keyword_rule}
-조각: {sub_keyword_rule}
-서브: {extra_keyword_count}개
+핵심키워드: {row_data['keyword']} (첫문단 2회 + 나머지 {main_keyword_rule})
+조각키워드: {sub_keyword_rule}
+서브키워드: {extra_keyword_count}개
 글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}
-키워드시작문장: {keyword_start_count}개
+핵심키워드 시작문장: {keyword_start_count}개
 </conditions>
 
 <original>
