@@ -583,6 +583,14 @@ class BlogEditorGUI:
         # 통키워드 문장 시작 횟수
         keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
 
+        # 원고에서 제목 라인 제거 (맨 위 # 으로 시작하는 한 줄)
+        original_text = row_data['original']
+        if original_text.strip().startswith('#'):
+            # 첫 줄 제거
+            lines = original_text.split('\n', 1)
+            original_text = lines[1] if len(lines) > 1 else ""
+            original_text = original_text.strip()
+
         user_prompt = f"""# 수정 조건
 
 **키워드**: {row_data['keyword']}
@@ -594,7 +602,7 @@ class BlogEditorGUI:
 
 # 수정할 원고
 
-{row_data['original']}
+{original_text}
 
 # 검수 체크리스트
 - [ ] 글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}자 범위 내
