@@ -513,11 +513,11 @@ class BlogEditorGUI:
             alt_text = ", ".join(alternatives[:3])  # 최대 3개까지만
             forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
 
-        # 예시 생성 (전부 사용 - 캐싱되므로 첫 요청에만 비용)
+        # 예시 생성 (최대 5개 - 테스트 중 캐시 만료 고려)
         examples_text = ""
         if self.examples:
             examples_text = "\n<examples>\n아래는 실제 수정 사례입니다. 특히 키워드 뒤 띄어쓰기와 한글자 조사 금지를 주목하세요!\n\n"
-            for i, ex in enumerate(self.examples, 1):
+            for i, ex in enumerate(self.examples[:5], 1):
                 original_text = str(ex['original']) if ex['original'] else ""
                 edited_text = str(ex['edited']) if ex['edited'] else ""
                 examples_text += f"""[예시 {i}]
