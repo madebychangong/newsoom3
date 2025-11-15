@@ -486,50 +486,26 @@ class BlogEditorGUI:
         
         return rule_text
         
-    def create_prompt(self, row_data):
-        """Claude용 프롬프트 생성"""
-        
-        # 키워드 규칙 파싱
-        main_keyword_rule = self.parse_keyword_rule(row_data['main_keyword_count'])
-        sub_keyword_rule = self.parse_sub_keywords(row_data['sub_keyword_count'])
-        extra_keyword_count = str(row_data['extra_keyword_count']).strip() if row_data['extra_keyword_count'] else "0"
-        
-        # 글자수 및 오차 계산
-        target_chars = int(row_data['char_count']) if row_data['char_count'] else 1000
-        char_tolerance = int(target_chars * 0.05)  # 5% 오차
-        
-        # 통키워드 문장 시작 횟수
-        keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
-        
+    def create_system_prompt(self):
+        """시스템 프롬프트 생성 (고정 부분 - 캐싱용)"""
+
         # 금칙어 리스트 생성
         forbidden_list = ""
         for forbidden, alternatives in self.forbidden_words.items():
             alt_text = ", ".join(alternatives[:3])  # 최대 3개까지만
             forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
-        
-        # 예시 데이터 (처음 3개)
-        examples_text = ""
-        for i, ex in enumerate(self.examples[:3], 1):
-            examples_text += f"\n\n=== 예시 {i} ===\n"
-            examples_text += f"키워드: {ex['keyword']}\n"
-            examples_text += f"통키워드: {ex['main_keyword_count']}\n"
-            examples_text += f"조각키워드: {ex['sub_keyword_count']}\n"
-            examples_text += f"서브키워드: {ex['extra_keyword_count']}\n"
-            examples_text += f"수정 전:\n{str(ex['original'])[:300]}...\n"
-            examples_text += f"수정 후:\n{str(ex['edited'])[:300]}...\n"
-        
-        prompt = f"""
-당신은 원고를 정확한 규칙에 맞춰 수정하는 전문가입니다.
+
+        system_prompt = f"""당신은 원고를 정확한 규칙에 맞춰 수정하는 전문가입니다.
 
 # 필수 규칙 (모두 100% 준수 필수!)
 
 ## 1. 키워드 규칙
-- **통 키워드 (핵심 키워드)**: {main_keyword_rule}
+- **통 키워드 (핵심 키워드)**: 지정된 횟수만큼 반복
   → **중요**: 이 횟수는 첫 문단을 제외한 나머지 문단에서의 반복 횟수
   → 첫 문단에는 무조건 2회, 나머지 문단에서만 지정된 횟수 반복
-- **조각 키워드**: {sub_keyword_rule}
+- **조각 키워드**: 지정된 횟수만큼 반복
   → **중요**: 이 횟수도 첫 문단을 제외한 나머지 문단에서의 반복 횟수
-- **서브 키워드 목록 수**: {extra_keyword_count}개
+- **서브 키워드 목록 수**: 지정된 개수 달성
   → 조각 키워드를 제외한 2회 이상 등장하는 단어의 총 개수
   → **중요**: 단어가 부족하면 중복 문장부호 적극 활용 (^^, ??, !!, ~~, .., ㅠㅠ, TT, ㅎㅎ 등)
   → 각 중복 문장부호는 서브키워드 1개로 카운팅됨
@@ -554,7 +530,7 @@ class BlogEditorGUI:
 - **주의**: 첫 문단은 첫 번째 문단 구분(줄바꿈) 전까지를 의미함
 
 ## 4. 핵심 키워드로 시작하는 문장
-- 글 전체에서 핵심 키워드로 시작하는 문장이 {keyword_start_count}개 있어야 함
+- 글 전체에서 핵심 키워드로 시작하는 문장이 지정된 개수만큼 있어야 함
 - 예: "강남 맛집 추천을 받아서..." (X - 조사 붙음)
 - 예: "강남 맛집 추천 리스트를 보면..." (O - 띄어쓰기 유지)
 
@@ -574,7 +550,7 @@ class BlogEditorGUI:
   → 맛집 서브키워드 추가시 예: # 강남 맛집 # 맛집 추천
 
 ## 7. 글자수
-- 목표: {target_chars}자 (허용 범위: {target_chars - char_tolerance}~{target_chars + char_tolerance}자)
+- 목표 글자수의 ±5% 범위 내로 작성
 - 글자수 초과 시: 불필요한 형용사, 부사, 중복 표현 삭제
 - 글자수 부족 시: 구체적인 예시, 부연 설명, 경험담 추가
 
@@ -583,36 +559,50 @@ class BlogEditorGUI:
 
 {forbidden_list}
 
-# 학습 예시 (패턴 참고)
-{examples_text}
+**⚠️ 모든 규칙은 동등하게 중요! 하나라도 어기면 안 됨!**
+
+**수정된 원고만 출력**하고, 설명이나 주석은 절대 붙이지 마세요."""
+
+        return system_prompt
+
+    def create_user_prompt(self, row_data):
+        """유저 프롬프트 생성 (변동 부분)"""
+
+        # 키워드 규칙 파싱
+        main_keyword_rule = self.parse_keyword_rule(row_data['main_keyword_count'])
+        sub_keyword_rule = self.parse_sub_keywords(row_data['sub_keyword_count'])
+        extra_keyword_count = str(row_data['extra_keyword_count']).strip() if row_data['extra_keyword_count'] else "0"
+
+        # 글자수 및 오차 계산
+        target_chars = int(row_data['char_count']) if row_data['char_count'] else 1000
+        char_tolerance = int(target_chars * 0.05)  # 5% 오차
+
+        # 통키워드 문장 시작 횟수
+        keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
+
+        user_prompt = f"""# 수정 조건
+
+**키워드**: {row_data['keyword']}
+**통 키워드**: {main_keyword_rule}
+**조각 키워드**: {sub_keyword_rule}
+**서브 키워드 목록 수**: {extra_keyword_count}개
+**목표 글자수**: {target_chars}자 (허용 범위: {target_chars - char_tolerance}~{target_chars + char_tolerance}자)
+**통키워드로 시작하는 문장**: {keyword_start_count}개
 
 # 수정할 원고
-**키워드**: {row_data['keyword']}
 
 {row_data['original']}
 
-# 지시사항
-위 모든 규칙을 정확히 지키면서 자연스럽고 읽기 편한 블로그 글로 수정하세요.
-
-**⚠️ 모든 규칙은 동등하게 중요! 하나라도 어기면 안 됨!**
-
-**검수 체크리스트:**
+# 검수 체크리스트
 - [ ] 글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}자 범위 내
 - [ ] 첫 문단: 4문장 이상 + '{row_data['keyword']}' 정확히 2회
 - [ ] 통키워드/조각키워드: 지정 횟수 준수
-- [ ] 서브키워드: 목표 개수 달성
-- [ ] 통키워드로 시작하는 문장: 지정 개수
+- [ ] 서브키워드: {extra_keyword_count}개 달성
+- [ ] 통키워드로 시작하는 문장: {keyword_start_count}개
 - [ ] 금칙어: 0개 (전부 대체어 사용)
-- [ ] 문단 구분: 2~4문장마다 빈 줄
+- [ ] 문단 구분: 2~4문장마다 빈 줄"""
 
-**예시:**
-- 통키워드 0회 지정 = 첫 문단에만 2회, 나머지 문단 0회
-- 조각키워드 '다이어트' 3회 지정 = 첫 문단 제외하고 3회
-
-**수정된 원고만 출력**하고, 설명이나 주석은 절대 붙이지 마세요.
-"""
-        
-        return prompt
+        return user_prompt
         
     def process_file(self):
         """파일 처리 메인 로직"""
@@ -628,10 +618,6 @@ class BlogEditorGUI:
             # 금칙어 로딩
             if not self.load_forbidden_words(base_dir):
                 messagebox.showwarning("경고", "금칙어 파일을 찾을 수 없습니다.\n같은 폴더에 '금칙어_리스트.xlsx'를 넣어주세요.")
-            
-            # 예시 로딩
-            if not self.load_examples(base_dir):
-                messagebox.showwarning("경고", "예시 파일을 찾을 수 없습니다.\n같은 폴더에 '수정전후.xlsx', '블로그_작업_엑셀템플릿.xlsx'를 넣어주세요.")
             
             # 입력 파일 로드
             wb = openpyxl.load_workbook(self.input_file)
@@ -666,14 +652,22 @@ class BlogEditorGUI:
                 self.log(f"목표 글자수: {row_data['char_count']}자")
                 
                 # AI 수정
-                self.log("⏳ AI 수정 중... (10~30초 소요)", "#f39c12")
-                prompt = self.create_prompt(row_data)
+                self.log("⏳ AI 수정 중... (10~30초 소요, 캐싱 적용)", "#f39c12")
+                system_prompt = self.create_system_prompt()
+                user_prompt = self.create_user_prompt(row_data)
 
                 message = client.messages.create(
                     model=self.selected_model,
                     max_tokens=4096,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system_prompt,
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ],
                     messages=[
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": user_prompt}
                     ]
                 )
                 edited_text = message.content[0].text.strip()
