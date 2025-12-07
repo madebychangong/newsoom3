@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 블로그 원고 자동 수정 프로그램 (GUI 버전)
-Claude API 기반
+Gemini API 기반
 """
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import openpyxl
-import anthropic
+import google.generativeai as genai
 import re
 import os
 from datetime import datetime
@@ -26,7 +26,6 @@ class BlogEditorGUI:
         
         # 데이터 저장 변수
         self.api_key = ""
-        self.selected_model = "claude-sonnet-4-5"  # 기본값
         self.forbidden_words = {}
         self.examples = []
         self.input_file = ""
@@ -79,55 +78,35 @@ class BlogEditorGUI:
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 20))
         
-        title_label = tk.Label(title_frame, text="📝 블로그 원고 자동 수정 프로그램",
+        title_label = tk.Label(title_frame, text="📝 블로그 원고 자동 수정 프로그램", 
                               font=("맑은 고딕", 18, "bold"), fg="#2c3e50")
         title_label.pack()
-
-        subtitle_label = tk.Label(title_frame, text="Claude AI 기반",
+        
+        subtitle_label = tk.Label(title_frame, text="Gemini 2.5 Pro AI 기반", 
                                  font=("맑은 고딕", 10), fg="#7f8c8d")
         subtitle_label.pack()
         
-        # 1. API 키 및 모델 선택 섹션
-        api_frame = ttk.LabelFrame(main_frame, text="  1️⃣  Claude API 설정  ", padding="10")
+        # 1. API 키 입력 섹션
+        api_frame = ttk.LabelFrame(main_frame, text="  1️⃣  Gemini API 키 입력  ", padding="10")
         api_frame.pack(fill=tk.X, pady=(0, 10))
-
-        # API 키 입력
+        
         api_input_frame = ttk.Frame(api_frame)
         api_input_frame.pack(fill=tk.X)
-
+        
         self.api_entry = ttk.Entry(api_input_frame, width=50, show="*", font=("맑은 고딕", 10))
         self.api_entry.pack(side=tk.LEFT, padx=(0, 10), fill=tk.X, expand=True)
-
+        
         self.api_button = ttk.Button(api_input_frame, text="저장", command=self.save_api_key)
         self.api_button.pack(side=tk.LEFT)
-
-        self.api_status = tk.Label(api_frame, text="❌ API 키 미등록",
+        
+        self.api_status = tk.Label(api_frame, text="❌ API 키 미등록", 
                                    font=("맑은 고딕", 9), fg="red")
         self.api_status.pack(anchor=tk.W, pady=(5, 0))
-
-        api_help = tk.Label(api_frame, text="💡 API 키 발급: https://console.anthropic.com/",
+        
+        api_help = tk.Label(api_frame, text="💡 API 키 발급: https://aistudio.google.com/app/apikey", 
                            font=("맑은 고딕", 8), fg="#3498db", cursor="hand2")
         api_help.pack(anchor=tk.W)
-        api_help.bind("<Button-1>", lambda e: self.open_url("https://console.anthropic.com/"))
-
-        # 모델 선택
-        model_frame = ttk.Frame(api_frame)
-        model_frame.pack(fill=tk.X, pady=(10, 0))
-
-        tk.Label(model_frame, text="모델 선택:", font=("맑은 고딕", 9)).pack(side=tk.LEFT, padx=(0, 10))
-
-        self.model_var = tk.StringVar(value="claude-sonnet-4-5")
-        model_combo = ttk.Combobox(model_frame, textvariable=self.model_var,
-                                   values=[
-                                       "claude-sonnet-4-5",
-                                       "claude-haiku-4-5"
-                                   ], state="readonly", width=30)
-        model_combo.pack(side=tk.LEFT)
-        model_combo.bind("<<ComboboxSelected>>", self.on_model_change)
-
-        self.model_info = tk.Label(model_frame, text="(규칙 준수: 최고, 비용: ₩26/개)",
-                                   font=("맑은 고딕", 8), fg="#7f8c8d")
-        self.model_info.pack(side=tk.LEFT, padx=(10, 0))
+        api_help.bind("<Button-1>", lambda e: self.open_url("https://aistudio.google.com/app/apikey"))
         
         # 2. 파일 선택 섹션
         file_frame = ttk.LabelFrame(main_frame, text="  2️⃣  수정할 엑셀 파일 선택  ", padding="10")
@@ -143,7 +122,7 @@ class BlogEditorGUI:
         self.file_button = ttk.Button(file_input_frame, text="📁 파일 선택", command=self.select_file)
         self.file_button.pack(side=tk.LEFT)
         
-        file_help = tk.Label(file_frame, text="💡 같은 폴더에 금칙어_리스트.xlsx 필요",
+        file_help = tk.Label(file_frame, text="💡 같은 폴더에 금칙어_리스트.xlsx, 수정전후.xlsx, 블로그_작업_엑셀템플릿.xlsx 필요", 
                             font=("맑은 고딕", 8), fg="#7f8c8d")
         file_help.pack(anchor=tk.W, pady=(5, 0))
         
@@ -175,18 +154,6 @@ class BlogEditorGUI:
         """URL 열기"""
         import webbrowser
         webbrowser.open(url)
-
-    def on_model_change(self, event=None):
-        """모델 선택 변경 시 처리"""
-        selected = self.model_var.get()
-        self.selected_model = selected
-
-        if selected == "claude-sonnet-4-5":
-            self.model_info.config(text="(규칙 준수: 최고, 비용: ₩26/개)")
-            self.log("✅ 모델 변경: Claude Sonnet 4.5 (최고 정확도)", "#3498db")
-        elif selected == "claude-haiku-4-5":
-            self.model_info.config(text="(규칙 준수: 높음, 비용: ₩9/개)")
-            self.log("✅ 모델 변경: Claude Haiku 4.5 (빠른 처리)", "#3498db")
         
     def log(self, message, color=None):
         """로그 출력"""
@@ -211,8 +178,8 @@ class BlogEditorGUI:
         
         # 파일로 저장
         self.save_api_key_to_file()
-
-        self.api_status.config(text=f"✅ API 키 저장 완료 ({self.model_var.get()})", fg="green")
+        
+        self.api_status.config(text="✅ API 키 저장 완료 (gemini-2.5-pro)", fg="green")
         self.log("✅ API 키가 저장되었습니다", "#27ae60")
         self.check_ready()
         messagebox.showinfo("저장 완료", "API 키가 저장되었습니다.\n다음 실행 시 자동으로 불러옵니다.")
@@ -333,11 +300,11 @@ class BlogEditorGUI:
             self.log(f"❌ 예시 로딩 실패: {str(e)}", "#e74c3c")
             return False
             
-    def analyze_speaker(self, text, client):
+    def analyze_speaker(self, text, model):
         """화자 정보 분석 (성별, 연령대, 상황)"""
         if not text:
             return "분석 불가"
-
+        
         try:
             analysis_prompt = f"""
 다음 블로그 글을 분석하여 작성자(화자)의 정보를 유추해주세요.
@@ -355,87 +322,103 @@ class BlogEditorGUI:
 연령대: 30대
 상황: 자녀 키 성장 고민
 """
-
-            message = client.messages.create(
-                model=self.selected_model,
-                max_tokens=1024,
-                messages=[
-                    {"role": "user", "content": analysis_prompt}
-                ]
-            )
-            analysis = message.content[0].text.strip()
-
+            
+            response = model.generate_content(analysis_prompt)
+            analysis = response.text.strip()
+            
             # 한 줄로 정리
             analysis = analysis.replace('\n', ' / ')
-
+            
             return analysis
-
+            
         except Exception as e:
             return f"분석 실패: {str(e)}"
     
     def add_line_breaks(self, text):
-        """문장마다 줄바꿈 추가 + 강제 문단 구분 (첫 5문장, 이후 3-4문장마다)"""
+        """자동 문단 구분 추가 (첫 문단 5문장, 이후 3-4문장 랜덤)"""
         if not text:
             return text
 
-        # 문장 단위로 분리 (종결 부호 포함)
-        sentences = re.split(r'([.!?])', text)
-        result = []
-        sentence_count = 0
-        next_break = 5  # 첫 문단은 5문장
+        # 기존 줄바꿈 정리
+        text = text.replace('\n', ' ').strip()
 
+        # 문장 분리 (., !, ? 기준)
+        sentences = re.split(r'([.!?])\s+', text)
+
+        # 문장 재조립 (종결부호 포함)
+        full_sentences = []
         for i in range(0, len(sentences)-1, 2):
-            sentence = sentences[i].strip()
-            if sentence:
-                # 문장 + 종결부호
-                result.append(sentence + sentences[i+1])
-                sentence_count += 1
+            if i+1 < len(sentences):
+                full_sentences.append(sentences[i] + sentences[i+1])
 
-                # 문단 구분 조건
-                if sentence_count >= next_break:
-                    result.append('\n\n')
-                    sentence_count = 0
-                    # 첫 문단 이후는 3-4문장 랜덤
-                    next_break = random.randint(3, 4)
-                else:
-                    result.append('\n')
+        # 마지막 문장 처리
+        if len(sentences) % 2 == 1:
+            full_sentences.append(sentences[-1])
 
-        # 마지막 홀수 문장 처리
-        if len(sentences) % 2 == 1 and sentences[-1].strip():
-            result.append(sentences[-1])
+        if not full_sentences:
+            return text
 
-        return ''.join(result).strip()
+        # 문단 구성
+        paragraphs = []
+        idx = 0
+
+        # 첫 문단: 5문장
+        if len(full_sentences) >= 5:
+            first_para = ' '.join(full_sentences[:5])
+            paragraphs.append(first_para)
+            idx = 5
+        else:
+            # 전체 문장이 5개 미만이면 그대로
+            return text
+
+        # 나머지 문단: 3-4문장씩 랜덤
+        while idx < len(full_sentences):
+            para_size = random.choice([3, 4])
+            para_sentences = full_sentences[idx:idx+para_size]
+            if para_sentences:
+                paragraphs.append(' '.join(para_sentences))
+            idx += para_size
+
+        # 문단 사이에 빈 줄 추가
+        result = '\n\n'.join(paragraphs)
+
+        return result.strip()
     
     def apply_basic_corrections(self, text):
         """기본 교정"""
         if not text:
             return text
-
-        # 1. 이모티콘 앞뒤 띄어쓰기 처리 (서브키워드 카운팅을 위해)
+        
+        # 1. 네요 -> 내요 (무조건)
+        text = text.replace('네요', '내요')
+        
+        # 2. 더라 -> 더 라 (무조건)
+        text = text.replace('더라', '더 라')
+        
+        # 3. 이모티콘 앞뒤 띄어쓰기 처리 (서브키워드 카운팅을 위해)
         emoticons = ['^^', '??', '!!', '~~', '...', 'ㅠㅠ', 'TT', 'ㅎㅎ', ';;', '--', 'ㅋㅋ']
-
+        
         for emoticon in emoticons:
             # 이모티콘 앞에 띄어쓰기 없으면 추가
             # "좋아요^^" → "좋아요 ^^"
             text = re.sub(r'([^\s])' + re.escape(emoticon), r'\1 ' + emoticon, text)
-
+            
             # 이모티콘 뒤 문장부호 제거하고 띄어쓰기
             # "^^ ." → "^^ "
             text = text.replace(f'{emoticon}.', f'{emoticon} ')
             text = text.replace(f'{emoticon},', f'{emoticon} ')
             text = text.replace(f'{emoticon}!', f'{emoticon} ')
             text = text.replace(f'{emoticon}?', f'{emoticon} ')
-
+            
             # 이모티콘 뒤에 아무것도 없거나 문자가 바로 오면 띄어쓰기 추가
             # "^^ 다음" 은 그대로, "^^다음" → "^^ 다음"
             text = re.sub(re.escape(emoticon) + r'([^\s.,!?])', emoticon + r' \1', text)
-
-        # 금칙어 치환은 AI가 직접 하도록 제거 (테스트용)
-
-        # 2. 맨 마지막에 강제 적용 (무조건 변동)
-        text = text.replace('네요', '내요')
-        text = text.replace('더라', '더 라')
-
+        
+        # 4. 금칙어 치환
+        for forbidden, alternatives in self.forbidden_words.items():
+            if forbidden in text and alternatives:
+                text = text.replace(forbidden, alternatives[0])
+        
         return text
     
     def clean_markdown(self, text):
@@ -501,102 +484,8 @@ class BlogEditorGUI:
         
         return rule_text
         
-    def create_stage1_prompt(self):
-        """1단계 시스템 프롬프트: 글자수와 키워드 자연스럽게 삽입"""
-
-        # 금칙어 리스트 생성
-        forbidden_list = ""
-        for forbidden, alternatives in self.forbidden_words.items():
-            alt_text = ", ".join(alternatives[:3])
-            forbidden_list += f"- '{forbidden}' 대신 → {alt_text} 중 문맥에 맞는 것 사용\n"
-
-        system_prompt = f"""<role>원고 수정 전문가. 1단계: 글자수와 키워드를 자연스럽게 조정</role>
-
-<strategy>
-기존 원고를 최대한 보존하며:
-1. 글자수를 목표 범위로 조정
-2. 키워드를 자연스럽게 삽입
-3. 금칙어 대체
-4. 원문 톤/스타일 유지
-</strategy>
-
-<rules>
-R1. 글자수: 목표 ±5% 범위 내 (최우선!)
-R2. 핵심키워드: 첫문단 2회 + 나머지문단 지정횟수 (대략적으로)
-R3. 조각키워드: 지정횟수 (대략적으로)
-R4. 금칙어 대체:
-{forbidden_list}
-R5. 원문 톤/스타일 유지
-</rules>
-
-<output>수정된 원고만 출력. 설명 금지.</output>"""
-
-        return system_prompt
-
-    def create_stage2_prompt(self):
-        """2단계 시스템 프롬프트: 세부 규칙 준수"""
-
-        # 예시 생성 (최대 5개)
-        examples_text = ""
-        if self.examples:
-            examples_text = "\n<examples>\n아래는 실제 수정 사례입니다. 특히 키워드 뒤 띄어쓰기와 한글자 조사 금지를 주목하세요!\n\n"
-            for i, ex in enumerate(self.examples[:5], 1):
-                original_text = str(ex['original']) if ex['original'] else ""
-                edited_text = str(ex['edited']) if ex['edited'] else ""
-                examples_text += f"""[예시 {i}]
-키워드: {ex['keyword']}
-글자수: {ex['char_count']}
-
-수정 전:
-{original_text}
-
-수정 후:
-{edited_text}
-
-{'─'*60}
-
-"""
-            examples_text += "\n✅ 위 예시들처럼 반드시:\n- 키워드 뒤 띄어쓰기 유지\n- 한글자 조사(을/를/이/가) 절대 금지\n- 우회 표현 사용 (정보/내용/방법/리스트 등)\n</examples>\n"
-
-        system_prompt = f"""<role>원고 정제 전문가. 2단계: 세부 규칙을 정확히 적용 (글자수 절대 변경 금지!)</role>
-{examples_text}
-
-<critical>
-⚠️ 글자수를 절대 변경하지 마세요! 1단계에서 이미 맞췄습니다.
-띄어쓰기와 구조만 조정하세요.
-</critical>
-
-<rules>
-R1. 첫 문단 구조 (매우 중요!)
-  - 정확히 4~5문장
-  - 핵심키워드 정확히 2회
-  - 키워드 사이에 최소 2문장 삽입
-  - 첫 문단 끝에 빈 줄(\n\n) 삽입
-
-R2. 키워드 띄어쓰기 (절대 규칙!)
-  - 모든 키워드 뒤 띄어쓰기 필수
-  - "추천을" (X) → "추천 정보를" (O)
-  - 한글자 조사(을/를/이/가) 절대 금지!
-  - 우회 표현 사용: 정보/내용/방법/리스트/관련/사항
-
-R3. 핵심키워드 시작 문장: 지정 개수
-
-R4. 서브키워드: 지정 개수 (부족시 ^^, ??, .. 활용)
-
-R5. 문단 구분
-  - 2~4문장마다 빈 줄(\n\n) 삽입
-  - 연속으로 쓰지 말 것
-</rules>
-
-<output>
-수정된 원고만 출력. 설명 금지.
-글자수를 절대 변경하지 말 것!
-</output>"""
-
-        return system_prompt
-
-    def create_stage1_user_prompt(self, row_data, original_text):
-        """1단계 유저 프롬프트: 글자수와 키워드 삽입"""
+    def create_stage1_prompt(self, row_data, original_text):
+        """1단계 프롬프트: 글자수와 키워드 자연스럽게 삽입"""
 
         # 키워드 규칙 파싱
         main_keyword_rule = self.parse_keyword_rule(row_data['main_keyword_count'])
@@ -606,49 +495,67 @@ R5. 문단 구분
         target_chars = int(row_data['char_count']) if row_data['char_count'] else 1000
         char_tolerance = int(target_chars * 0.05)
 
-        user_prompt = f"""<task>
-<conditions>
-핵심키워드: {row_data['keyword']} (첫문단 약 2회 + 나머지 {main_keyword_rule})
-조각키워드: {sub_keyword_rule}
-글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance} (최우선!)
-</conditions>
+        # 금칙어 리스트 생성
+        forbidden_list = ""
+        for forbidden, alternatives in self.forbidden_words.items():
+            alt_text = ", ".join(alternatives[:3])
+            forbidden_list += f"- '{forbidden}' 대신 → {alt_text}\n"
 
-<original>
+        prompt = f"""당신은 원고 수정 전문가입니다. [1단계 작업]
+
+# 목표
+기존 원고를 최대한 보존하며 글자수와 키워드를 자연스럽게 조정하세요.
+
+# 규칙 (간단함!)
+1. 글자수: {target_chars - char_tolerance}~{target_chars + char_tolerance}자 (최우선!)
+2. 핵심키워드 '{row_data['keyword']}': 첫문단 약 2회 + 나머지 {main_keyword_rule} (대략적으로)
+3. 조각키워드: {sub_keyword_rule} (대략적으로)
+4. 금칙어 대체:
+{forbidden_list}
+5. 원문 톤/스타일 유지
+
+# 수정할 원고
 {original_text}
-</original>
-</task>"""
 
-        return user_prompt
+# 지시
+수정된 원고만 출력하세요. 설명 금지.
+"""
+        return prompt
 
-    def create_stage2_user_prompt(self, row_data, stage1_result):
-        """2단계 유저 프롬프트: 세부 규칙 적용"""
+    def create_stage2_prompt(self, row_data, stage1_result):
+        """2단계 프롬프트: 세부 규칙 정확히 적용"""
 
         extra_keyword_count = str(row_data['extra_keyword_count']).strip() if row_data['extra_keyword_count'] else "0"
         keyword_start_count = str(row_data['keyword_start_count']).strip() if row_data['keyword_start_count'] else "2~3"
 
-        user_prompt = f"""<task>
-<stage1_result>
+        prompt = f"""당신은 원고 정제 전문가입니다. [2단계 작업]
+
+⚠️ 중요: 글자수를 절대 변경하지 마세요! 1단계에서 이미 맞췄습니다.
+띄어쓰기와 구조만 조정하세요.
+
+# 1단계 결과
 {stage1_result}
-</stage1_result>
 
-<requirements>
-핵심키워드: {row_data['keyword']}
-- 첫문단: 정확히 2회 (사이에 2문장 이상)
-- 나머지문단: 지정 횟수
-- 키워드로 시작하는 문장: {keyword_start_count}개
+# 세부 규칙
+1. 첫 문단 구조
+   - 정확히 4-5문장
+   - 핵심키워드 '{row_data['keyword']}' 정확히 2회
+   - 키워드 사이에 최소 2문장 삽입
 
-서브키워드: {extra_keyword_count}개
+2. 키워드 띄어쓰기 (절대 규칙!)
+   - 모든 키워드 뒤 띄어쓰기 필수
+   - "추천을" (X) → "추천 정보를" (O)
+   - 한글자 조사(을/를/이/가) 절대 금지!
+   - 우회 표현 사용: 정보/내용/방법/리스트/관련/사항
 
-중요:
-- 글자수 절대 변경 금지!
-- 키워드 뒤 한글자 조사(을/를/이/가) 절대 금지
-- 우회 표현 사용: 정보/내용/방법/리스트/관련/사항
-- 첫문단 4~5문장
-- 문단 구분 빈 줄(\n\n)
-</requirements>
-</task>"""
+3. 핵심키워드 시작 문장: {keyword_start_count}개
 
-        return user_prompt
+4. 서브키워드: {extra_keyword_count}개 (부족시 ^^, ??, .. 활용)
+
+# 지시
+수정된 원고만 출력하세요. 설명 금지. 글자수 변경 절대 금지!
+"""
+        return prompt
         
     def process_file(self):
         """파일 처리 메인 로직"""
@@ -660,21 +567,23 @@ R5. 문단 구분
             
             # 같은 폴더 경로
             base_dir = os.path.dirname(self.input_file)
-
+            
             # 금칙어 로딩
             if not self.load_forbidden_words(base_dir):
                 messagebox.showwarning("경고", "금칙어 파일을 찾을 수 없습니다.\n같은 폴더에 '금칙어_리스트.xlsx'를 넣어주세요.")
-
-            # 예시 파일 로딩
-            self.load_examples(base_dir)
+            
+            # 예시 로딩
+            if not self.load_examples(base_dir):
+                messagebox.showwarning("경고", "예시 파일을 찾을 수 없습니다.\n같은 폴더에 '수정전후.xlsx', '블로그_작업_엑셀템플릿.xlsx'를 넣어주세요.")
             
             # 입력 파일 로드
             wb = openpyxl.load_workbook(self.input_file)
             ws = wb.active
-
-            # Claude 클라이언트 초기화
-            client = anthropic.Anthropic(api_key=self.api_key)
-
+            
+            # Gemini 모델 초기화
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel('gemini-2.5-pro')
+            
             total_rows = ws.max_row - 1
             
             for row_idx in range(2, ws.max_row + 1):
@@ -700,72 +609,46 @@ R5. 문단 구분
                 self.log(f"키워드: {row_data['keyword']}")
                 self.log(f"목표 글자수: {row_data['char_count']}자")
 
-                # 원고에서 제목 라인 제거 (맨 위 # 으로 시작하는 한 줄)
-                original_text = row_data['original']
-                if original_text and original_text.strip().startswith('#'):
-                    lines = original_text.split('\n', 1)
-                    original_text = lines[1] if len(lines) > 1 else ""
-                    original_text = original_text.strip()
+                # 원고에서 제목 제거 (# 으로 시작하는 첫 줄)
+                original_text = str(row_data['original'])
+                lines = original_text.split('\n')
+                if lines and lines[0].strip().startswith('#'):
+                    original_text = '\n'.join(lines[1:]).strip()
+                    self.log("📌 제목 라인 제거됨", "#95a5a6")
 
-                # ===== 1단계: 글자수와 키워드 삽입 =====
-                self.log("⏳ [1단계] 글자수 맞추기 및 키워드 삽입 중...", "#f39c12")
-                stage1_system = self.create_stage1_prompt()
-                stage1_user = self.create_stage1_user_prompt(row_data, original_text)
+                # [1단계] AI 수정 - 글자수 + 키워드 자연스럽게
+                self.log("⏳ [1단계] 글자수 및 키워드 조정 중...", "#f39c12")
+                stage1_prompt = self.create_stage1_prompt(row_data, original_text)
 
-                stage1_message = client.messages.create(
-                    model=self.selected_model,
-                    max_tokens=4096,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": stage1_system,
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ],
-                    messages=[
-                        {"role": "user", "content": stage1_user}
-                    ]
-                )
-                stage1_result = stage1_message.content[0].text.strip()
+                response1 = model.generate_content(stage1_prompt)
+                stage1_result = response1.text.strip()
                 stage1_result = self.clean_markdown(stage1_result)
+
                 self.log(f"✅ [1단계] 완료 (글자수: {len(stage1_result)}자)", "#27ae60")
 
-                # ===== 2단계: 세부 규칙 적용 =====
-                self.log("⏳ [2단계] 띄어쓰기 및 문단 구조 조정 중...", "#f39c12")
-                stage2_system = self.create_stage2_prompt()
-                stage2_user = self.create_stage2_user_prompt(row_data, stage1_result)
+                # [2단계] AI 수정 - 세부 규칙 정확히 적용
+                self.log("⏳ [2단계] 세부 규칙 적용 중...", "#f39c12")
+                stage2_prompt = self.create_stage2_prompt(row_data, stage1_result)
 
-                stage2_message = client.messages.create(
-                    model=self.selected_model,
-                    max_tokens=4096,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": stage2_system,
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ],
-                    messages=[
-                        {"role": "user", "content": stage2_user}
-                    ]
-                )
-                edited_text = stage2_message.content[0].text.strip()
+                response2 = model.generate_content(stage2_prompt)
+                edited_text = response2.text.strip()
                 edited_text = self.clean_markdown(edited_text)
-                self.log(f"✅ [2단계] 완료 (최종 글자수: {len(edited_text)}자)", "#27ae60")
 
-                # 기본 교정 적용 (네요→내요, 더라→더 라)
+                self.log(f"✅ [2단계] 완료 (글자수: {len(edited_text)}자)", "#27ae60")
+
+                # AI 생성 후 기본 교정 적용 (네요→내요, 더라→더 라, 금칙어)
                 edited_text = self.apply_basic_corrections(edited_text)
 
-                # 문장마다 줄바꿈 추가
+                # 자동 문단 구분 추가 (첫 5문장, 이후 3-4문장)
                 edited_text = self.add_line_breaks(edited_text)
 
                 # 결과 저장 (M열 = 13번)
                 ws.cell(row_idx, 13).value = edited_text
-                self.log(f"🎯 최종 완료 (결과 글자수: {len(edited_text)}자)", "#27ae60")
+                self.log(f"✅ 최종 완료 (결과 글자수: {len(edited_text)}자)", "#27ae60")
                 
                 # 화자 분석 (N열 = 14번)
                 self.log("⏳ 화자 정보 분석 중...", "#3498db")
-                speaker_info = self.analyze_speaker(edited_text, client)
+                speaker_info = self.analyze_speaker(edited_text, model)
                 ws.cell(row_idx, 14).value = speaker_info
                 self.log(f"✅ 화자 분석 완료: {speaker_info}", "#27ae60")
                 
